@@ -30,7 +30,7 @@ charsets = [
 
 def flatten(iterable):
     """ Yields every individual element from an iterable or nested iterable.
-    str and bytes literals are treated as a single element.
+    str and bytes literals are treated as single elements.
     Code adapted from: https://stackoverflow.com/a/2158532
     """
     for el in iterable:
@@ -52,7 +52,9 @@ def generate_secret_key(length=16):
 
 
 def ipfs_hash(content):
-    """ Returns the IPFS hash of an object. """
+    """ Returns the SHA2-256 multihash of an object. Non-bytes objects are
+    converted to strings and then encoded before being hashed.
+    """
     if not isinstance(content, bytes):
         content = str(content).encode()
     mh = multihash.digest(content, multihash.Func.sha2_256)
