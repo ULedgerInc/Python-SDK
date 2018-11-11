@@ -589,10 +589,9 @@ class BlockchainUser:
                 returned as a list of dictionaries
             []: if no matches were found, an empty list will be returned
         """
-        # Validate parameters: tags_any and tags_all can't be used together,
-        # and transaction_hash can only be used by itself.
-        if (kwargs.get("tags_any") and kwargs.get("tags_all")
-                or (kwargs.get("transaction_hash") and len(kwargs) > 1)):
+        # Ensure that transaction_hash is only ever used by itself to prevent
+        # 'result': [{'merkle_proof': {}}]
+        if kwargs.get("transaction_hash") and len(kwargs) > 1:
             raise ValueError("Illegal parameter combination.")
 
         # Normalize any metadata that's present.
@@ -600,12 +599,11 @@ class BlockchainUser:
             kwargs["tags_any"] = self._normalize(
                 kwargs["tags_any"], coerce=coerce, dumps=False, key="tags_any")
         except KeyError:
-            pass
-        try:
-            kwargs["tags_all"] = self._normalize(
-                kwargs["tags_all"], coerce=coerce, dumps=False, key="tags_all")
-        except KeyError:
-            pass
+            try:
+                kwargs["tags_all"] = self._normalize(
+                    kwargs["tags_all"], coerce=coerce, dumps=False, key="tags_all")
+            except KeyError:
+                pass
 
         # Select endpoint
         if with_content:
@@ -616,9 +614,10 @@ class BlockchainUser:
         transactions = []
 
         # If 'page' exists and is an integer, request the one-and-only page.
+        # If no transactions are present, use an empty list instead.
         if isinstance(kwargs.get("page"), int):
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
-            transactions = self._call_api(endpoint, fields)["result"] or []  # catch None asap
+            transactions = self._call_api(endpoint, fields)["result"] or []
 
         # Otherwise get all of the pages via pagination.
         else:
