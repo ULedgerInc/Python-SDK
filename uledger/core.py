@@ -462,6 +462,8 @@ class BlockchainUser:
         """
         if os.stat(filename).st_size > 52428800:
             raise OSError("The maximum file size is 50MB.")
+        elif not os.path.splitext(filename)[1]:
+            raise OSError("Files on the blockchain must have an extension.")
 
         fields = {
             "user": self._user(),
@@ -598,8 +600,6 @@ class BlockchainUser:
         else:
             endpoint = "/store/getTransactions"
 
-        transactions = []
-
         # If 'page' exists and is an integer, request the one-and-only page.
         # If no transactions are present, use an empty list instead.
         if isinstance(kwargs.get("page"), int):
@@ -608,6 +608,7 @@ class BlockchainUser:
 
         # Otherwise get all of the pages via pagination.
         else:
+            transactions = []
             kwargs["page"] = 0
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             while 1:
