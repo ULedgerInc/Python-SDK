@@ -14,7 +14,7 @@
 
 """ This module contains helper functions for the ULedger SDK. """
 
-import collections.abc
+import collections
 import random
 
 import base58
@@ -53,7 +53,7 @@ def generate_secret_key(length=16):
 
 def ipfs_hash(content):
     """ Returns the SHA2-256 multihash of an object. Non-bytes objects are
-    converted to strings and then encoded before being hashed.
+    converted to strings and then encoded using utf-8 before being hashed.
     """
     if not isinstance(content, bytes):
         content = str(content).encode()

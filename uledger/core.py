@@ -12,23 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-""" This is a software development kit for the ULedger API.
-It will take care of API-related boilerplate so you don't have to.
-
-Basic Usage:
-    1. Create a new BlockchainUser object using the url and token for a
-       ULedger blockchain and an access key and secret key belonging to one
-       of that blockchain's users.
-    2. Use the BlockchainUser object to make requests to the API server.
-       In general, you can add data, query data, and manage users.
-
-Example:
-    import uledger
-    jackson = uledger.BlockchainUser("url", "token", "access_key", "secret_key")
-    jackson.add_string("hello world!")
-
-Once you put data on a ULedger blockchain, you cannot delete or modify it.
-Check that your data is clean and proper BEFORE you record it to the blockchain.
+""" This is the core module for the ULedger SDK. It implements the BlockchainUser
+class, whose objects act as the main interface to the ULedger API.
 
 References:
     https://stackoverflow.com/a/2164383
@@ -36,7 +21,7 @@ References:
     https://stackoverflow.com/a/16696317
 """
 
-from collections.abc import Iterable
+import collections
 import json
 import operator
 import os
@@ -99,8 +84,7 @@ class BlockchainUser:
     # ----------------
 
     def _call_api(self, endpoint, fields):
-        """ Calls the API and returns its response. This is an internal method
-        that you should never need to call directly.
+        """ Calls the API.
 
         Args:
             endpoint (str): the API endpoint to request from
@@ -108,14 +92,10 @@ class BlockchainUser:
 
         Raises:
             APIError: if something went wrong with the API
-            requests.exceptions.RequestException: if an error was encountered
-                while making the request
+            requests.RequestException: if something went wrong with the request
 
         Returns:
-            dict: if the response included a single transaction object,
-                it will be returned as a dictionary.
-            list of dict: if the response included multiple transaction objects,
-                they will be returned as a list of dictionaries.
+            dict: the API response with 0, 1, or 2+ Transaction Objects
         """
         # Format the request information.
         url = f"{self.url}{endpoint}"
@@ -128,17 +108,15 @@ class BlockchainUser:
 
         # Convert the response to a dictionary and check it for errors.
         r.encoding = 'utf-8'
-        response = r.json()
+        response = r.json()        # TODO decode to TransactionObject
         error = response["error"]
-        if error != "false":  # == True
+        if error != "false":
             raise APIError(error, response)
 
         return response
 
     def _call_api2(self, endpoint, fields, download=False):
-        """ Calls the API and streams its response. This is an internal method
-        built specifically for the 'getContent' endpoint that you should never
-        need to call directly.
+        """ Calls the API and streams its response.
 
         Args:
             endpoint (str): the API endpoint to request from
@@ -149,14 +127,11 @@ class BlockchainUser:
 
         Raises:
             APIError: if something went wrong with the API
-            requests.exceptions.RequestException: if something went wrong with
-                the request
+            requests.RequestException: if something went wrong with the request
 
         Returns:
-            dict: if the response included a single transaction object,
-                it will be returned as a dictionary.
-            list of dict: if the response included multiple transaction objects,
-                they will be returned as a list of dictionaries.
+            dict: the API response including 0 or 1 Transaction Objects with
+                a 'content' field and potentially an 'extension' field.
         """
         # Format the request information
         url = f"{self.url}{endpoint}"
@@ -168,7 +143,6 @@ class BlockchainUser:
         r.raise_for_status()
 
         # Stream any file in the response to the Downloads folder.
-        # TODO this may fail for files without extensions
         if download and "." in r.headers["Content-Disposition"]:
             filename = endpoint.rsplit(sep='=', maxsplit=1)[1]
             dest = os.path.join(os.path.expanduser("~"), "Downloads", filename)
@@ -182,7 +156,7 @@ class BlockchainUser:
         # Convert the response to text and check it for API errors.
         r.encoding = 'utf-8'
         response = r.text  # set to 'replace' by default
-        if response.startswith('"Error: '):  # == True
+        if response.startswith('"Error: '):
             error_msg = response[8:].strip('\"\n')
             raise APIError(error_msg)
 
@@ -205,18 +179,17 @@ class BlockchainUser:
             md (any): the variable or iterable that will be normalized into
                 a metadata list. md can be None, a regular data type,
                 a dictionary, or any iterable that supports __iter__().
-                str and bytes objects are treated as a single value rather
-                than as an iterable.
+                Note: str and bytes objects are treated as a single value.
             coerce (bool): if coerce is set to True, the metadata list will be
                 forcibly shortened to 50 tags of no more than 50 characters
-                each. Otherwise, the originally data will not be modified.
+                each. If False, the original data will not be modified.
                 If you fail to meet the metadata requirements, the API server
                 will reject your transaction and return an error.
-            dumps(bool): if dumps is set to True, then the final list will
-                also be serialized into a JSON-formatted string.
-            key (str): if dumps is set to True, then this argument will be
-                used to form the key-value pair with the normalized metedata
-                for the JSON string.
+            dumps(bool): if dumps is set to True, then the final list of
+                metadata will be serialized into a JSON-formatted string.
+            key (str): if dumps is set to True, key will be used to form the
+                key-value pair with the normalized metadata for the JSON.
+                e.g.: json.dumps({key: normalized_metadata})
 
         Returns:
             JSON: if dumps is True, the normalized metadata will be returned
@@ -230,7 +203,7 @@ class BlockchainUser:
             tag_list = [md]
         elif isinstance(md, dict):
             tag_list = [f"{key}={value}" for key, value in md.items()]
-        elif not isinstance(md, Iterable):
+        elif not isinstance(md, collections.Iterable):
             tag_list = [str(md)]
         else:
             tag_list = list(map(str, helpers.flatten(md)))
@@ -297,10 +270,10 @@ class BlockchainUser:
 
         Args:
             target_access_key (str): the user to authorize
-            permissions (list of str): permissions to grant to the user.
-                When calling this method, simply specify any combination of
-                'can_read', 'can_write', 'can_add_user', or 'can_add_permission'
-                as parameters or as a list of strings.
+            permissions (str): permissions to grant to the user. In the call
+                to authorize(), specify any combination of 'can_read'
+                'can_write', 'can_add_user', or 'can_add_permission' as
+                separate arguments or together as a list of strings.
 
         Returns:
             dict: the user's updated information including their access
@@ -351,13 +324,17 @@ class BlockchainUser:
     def deactivate(self, target_access_key):
         """ Removes all permissions from a user.
 
-        Deactivating a user multiple times does nothing. You can deactivate
-        yourself. The super admin cannot be deactivated.
+        A user must be confirmed before being deactivated. Deactivating a user
+        multiple times does nothing. You can deactivate yourself. The super
+        admin cannot be deactivated.
 
         The acting user must have 'can_add_permission' permissions.
 
         Args:
             target_access_key (str): the user to deactivate
+
+        Returns:
+            dict: {'error': ..., 'access_key': ...}
         """
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key, deactivate=True)}
@@ -375,9 +352,9 @@ class BlockchainUser:
                 acting user's blockchain will be returned.
 
         Returns:
-            []: if no matches are found
             list of dict: if a matching name is found, the matching user(s)
                 is/are returned as a list of dictionaries.
+            []: if no matches are found
         """
         fields = {"user": self._user(), "name": name}
         try:
@@ -409,7 +386,7 @@ class BlockchainUser:
         return response["access_key"], response["secret_key"]
 
     def new_confirmed_user(self, name, new_secret_key=""):
-        """ Adds a user to the blockchain and immediately confirms them.
+        """ Adds a user to the blockchain and confirms them.
 
         The acting user must have 'can_add_user' permissions.
 
@@ -444,10 +421,10 @@ class BlockchainUser:
 
         Args:
             target_access_key (str): the user to revoke permissions from
-            permissions (list of str): permissions to revoke from the user.
-                When calling this method, simply specify any combination of
-                'can_read', 'can_write', 'can_add_user', or 'can_add_permission'
-                as parameters or as a list of strings.
+            permissions (str): permissions to revoke from the user. In the call
+                to revoke(), specify any combination of 'can_read', 'can_write',
+                'can_add_user', or 'can_add_permission' as separate arguments
+                or together as a list of strings.
 
         Returns:
             dict: the user's updated information including their access
@@ -466,19 +443,19 @@ class BlockchainUser:
         """ Adds a file to the blockchain.
 
         The blockchain accepts arbitrary data, so you can add any kind of
-        file, from raw text to executables and compressed archives. However,
-        the API prohibits files over 50MB.
+        file, from raw text to executables and compressed archives.
+        The file must have an extension and cannot exceed 50MB.
 
         The acting user must have 'can_write' permissions.
 
         Args:
             filename (str): the name of / path to the file to upload
             tags (any): metadata to record alongside the file
-            coerce (bool): whether the metadata should be coerced into proper
-                form before the request (see _normalize() for details)
+            coerce (bool): whether the metadata should be forced into the
+                proper form (see _normalize() for details)
 
         Raises:
-            OSError: if the file is more than 50MB
+            OSError: if the file does not have an extension or exceeds 50MB
 
         Returns:
             dict: the new transaction's Transaction Object
@@ -502,8 +479,8 @@ class BlockchainUser:
         Args:
             content_string (str): the string to record to the blockchain
             tags (any): metadata to record to the blockchain
-            coerce (bool): whether the metadata should be coerced into proper
-                form before the request (see _normalize() for details)
+            coerce (bool): whether the metadata should be forced into the
+                proper form (see _normalize() for details)
 
         Returns:
             dict: the new transaction's Transaction Object
@@ -517,11 +494,11 @@ class BlockchainUser:
         return self._call_api("/store/add", fields)["result"]
 
     def get_content(self, content_hash, download=False):
-        """ Requests the content indexed by content_hash.
+        """ Retrieves the blockchain content indexed by content_hash.
 
         Each piece of content stored on the blockchain is indexed by its
         SHA2-256 multihash. This method will search the blockchain for a
-        multihash and return the content that created it. This is very similar
+        multihash and return the content that created it. This is similar
         to the scheme used by the InterPlanetary File System protocol.
 
         The acting user must have 'can_read' permissions.
@@ -543,15 +520,25 @@ class BlockchainUser:
 
     def get_transactions(self, coerce=False, with_content=False,
                          ensure_order=True, reverse=True, **kwargs):
-        """ Queries the blockchains for transactions.
+        """ Queries the blockchain for transactions.
+
+        This method is intended to retrieve transaction metadata, not content.
+        If you're interested in retrieving content from the blockchain, use
+        the get_content() method. That being said, this method *can* retrieve
+        raw string content, but it will not retrieve raw file content. Instead,
+        it will provide a URL for use with get_content().
 
         The acting user must have 'can_read' permissions.
 
         Args:
-            coerce (bool): if set to True, any metadata specified with tags_any
-                or tags_all will be forcibly normalized (see _normalize()).
-            with_content (bool): if set to True, transaction content will be
-                returned when possible.
+            coerce (bool): whether the metadata should be forced into the
+                proper form (see _normalize() for details)
+            with_content (bool): if set to True, a 'content' field will be
+                populated for each Transaction Object when possible. If string
+                content is encountered, it will be added to the content field.
+                If file content is encountered, the content field will be
+                populated with a URL to download the file later. Files will
+                also populate an 'extension' field with their file extension.
             ensure_order (bool): if set to True, transactions will be returned
                 in sorted order. By default, transactions are not guaranteed
                 to be returned in sorted order.
@@ -560,7 +547,7 @@ class BlockchainUser:
                 in ascending order. If reverse if True, they will be sorted in
                 descending order.
 
-        Query Parameters:
+        Query Args (kwargs):
             transaction_hash (str): a transaction hash to search for on the
                 blockchain. Each transaction on the blockchain has a unique
                 transaction hash, so this query parameter will only ever match
@@ -594,7 +581,7 @@ class BlockchainUser:
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
             raise ValueError("Illegal parameter combination.")
 
-        # Normalize any metadata that's present.
+        # Normalize any metadata that's present. This doubles as validation.
         try:
             kwargs["tags_any"] = self._normalize(
                 kwargs["tags_any"], coerce=coerce, dumps=False, key="tags_any")
@@ -605,7 +592,7 @@ class BlockchainUser:
             except KeyError:
                 pass
 
-        # Select endpoint
+        # Select the endpoint to use.
         if with_content:
             endpoint = "/store/getTransactionsWithContent"
         else:
@@ -634,7 +621,7 @@ class BlockchainUser:
                 try:
                     transactions.extend(result)
                 except TypeError:
-                    break  # No results were found (None loaded from r.json())
+                    break  # No results were found
                 if len(transactions) < 100:
                     break  # The next page will be blank
 
@@ -648,7 +635,10 @@ class BlockchainUser:
 
     def verify(self, transaction_hash="", content_hash="",
                content_string="", filename=""):
-        """ Verifies whether some content or its hash appears on the blockchain.
+        """ Checks whether something appears on the blockchain.
+
+        Only one parameter will be used, prioritized from left to right:
+            transaction_hash > content_hash > content_string > filename.
 
         The acting user must have 'can_read' permissions.
 
@@ -658,7 +648,7 @@ class BlockchainUser:
             content_hash (str): the SHA2-256 multihash of the content you
                 want to verify. Use helpers.ipfs_hash() to create this hash.
             content_string (str): the string you want to verify
-            filename (str): the name of or path to the file to verify
+            filename (str): the name of / the path to the file to verify
 
         Returns:
             True: if the content was recorded on the blockchain
