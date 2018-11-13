@@ -111,7 +111,7 @@ class BlockchainUser:
         response = r.json()        # TODO decode to TransactionObject
         error = response["error"]
         if error != "false":
-            raise APIError(error, response)
+            raise APIError(error, fields)
 
         return response
 
@@ -157,8 +157,8 @@ class BlockchainUser:
         r.encoding = 'utf-8'
         response = r.text  # set to 'replace' by default
         if response.startswith('"Error: '):
-            error_msg = response[8:].strip('\"\n')
-            raise APIError(error_msg)
+            error_msg = response[8:].rstrip('\"\n')
+            raise APIError(error_msg, fields)
 
         return response
 
@@ -615,7 +615,7 @@ class BlockchainUser:
                 try:
                     result = self._call_api(endpoint, fields)["result"]
                 except APIError as e:
-                    if str(e.args[0]) == "No transactions for the specified time range.":
+                    if str(e) == "No transactions for the specified time range.":
                         break  # We've gone too far
                     else:
                         raise  # Elevate a legitimate error
@@ -668,7 +668,7 @@ class BlockchainUser:
         try:
             self._call_api("/store/verify", fields)
         except APIError as e:
-            if e.args[0] == 'The transaction is not registered.':
+            if str(e) == 'The transaction is not registered.':
                 return False
             else:
                 raise
