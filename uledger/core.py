@@ -12,8 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-""" This is the core module for the ULedger SDK. It implements the BlockchainUser
-class, whose objects act as the main interface to the ULedger API.
+""" This is the core module for the ULedger SDK. It implements the
+BlockchainUser class, whose objects act as an interface to the ULedger API.
 
 References:
     https://stackoverflow.com/a/2164383
@@ -73,8 +73,9 @@ class BlockchainUser:
         self.secret_key = secret_key
 
     def __repr__(self):
-        return (f"{self.__class__.__name__}({self.url}, {self.token}, "
-                f"{self.access_key}, {self.secret_key})")
+        return ("{0}({1}, {2}, {3}, {4})".format(
+            self.__class__.__name__, self.url, self.token, self.access_key,
+            self.secret_key))
 
     def __str__(self):
         return str(self.__dict__)
@@ -98,7 +99,7 @@ class BlockchainUser:
             dict: the API response with 0, 1, or 2+ Transaction Objects
         """
         # Format the request information.
-        url = f"{self.url}{endpoint}"
+        url = "{0}{1}".format(self.url, endpoint)
         data = MultipartEncoder(fields=fields)
         headers = {"Content-Type": data.content_type, "token": self.token}
 
@@ -134,7 +135,7 @@ class BlockchainUser:
                 a 'content' field and potentially an 'extension' field.
         """
         # Format the request information
-        url = f"{self.url}{endpoint}"
+        url = "{0}{1}".format(self.url, endpoint)
         data = MultipartEncoder(fields=fields)
         headers = {"Content-Type": data.content_type, "token": self.token}
 
@@ -202,7 +203,8 @@ class BlockchainUser:
         elif isinstance(md, str):
             tag_list = [md]
         elif isinstance(md, dict):
-            tag_list = [f"{key}={value}" for key, value in md.items()]
+            tag_list = ["{0}={1}".format(key, value)
+                        for key, value in md.items()]
         elif not isinstance(md, collections.Iterable):
             tag_list = [str(md)]
         else:
@@ -435,9 +437,9 @@ class BlockchainUser:
             revoke=permissions)}
         return self._call_api("/store/authorize", fields)
 
-    # ------------------
-    # Content Management
-    # ------------------
+    # ---------------
+    # Data Management
+    # ---------------
 
     def add_file(self, filename, tags=None, coerce=False):
         """ Adds a file to the blockchain.
@@ -516,7 +518,7 @@ class BlockchainUser:
             None: if content_hash points to a file or does not appear on the
                 blockchain, None is returned
         """
-        endpoint = f"/store/content?hash={content_hash}"
+        endpoint = "/store/content?hash={0}".format(content_hash)
         fields = {"user": self._user()}
         return self._call_api2(endpoint, fields, download=download)
 
