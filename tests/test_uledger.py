@@ -158,7 +158,7 @@ def test_add_string(blns=False):
 
 def test_new_confirmed_user():
     # random.choices is available beginning in Python3.6
-    if sys.version[1] > 6:
+    if sys.version[3] > 6:
         name1 = ''.join(random.choices(string.ascii_letters, k=random.randint(3, 10)))
         name2 = ''.join(random.choices(string.ascii_letters, k=random.randint(3, 10)))
 
