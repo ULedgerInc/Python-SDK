@@ -25,10 +25,12 @@ import time
 
 import requests
 
-# Try to import the uledger package regardless of where this script is run from
+# Import the uledger package regardless of where this script is run from.
+# This will resolve "attempted relative import with no known parent package.
+# All three errors have been encountered on various installs of Python3.5+
 try:
     from .. import uledger
-except ValueError:  # Attempted relative import in non-package
+except (ImportError, SystemError, ValueError):
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     import uledger
 
@@ -155,14 +157,21 @@ def test_add_string(blns=False):
 
 
 def test_new_confirmed_user():
-    # add a name
-    name = ''.join(random.choices(string.ascii_letters, k=random.randint(3, 10)))
-    print(admin.new_confirmed_user(name))
+    # random.choices is available beginning in Python3.6
+    if sys.version[1] > 6:
+        name1 = ''.join(random.choices(string.ascii_letters, k=random.randint(3, 10)))
+        name2 = ''.join(random.choices(string.ascii_letters, k=random.randint(3, 10)))
 
-    # add a name with a password
-    name = ''.join(random.choices(string.ascii_letters, k=random.randint(3, 10)))
+    else:
+        name1 = ''.join([random.choice(string.ascii_letters) for _ in range(random.randint(3, 10))])
+        name2 = ''.join([random.choice(string.ascii_letters) for _ in range(random.randint(3, 10))])
+
+    # Test name 1
+    print(admin.new_confirmed_user(name1))
+
+    # Test name 2
     password = uledger.generate_secret_key()
-    print(admin.new_confirmed_user(name, password))
+    print(admin.new_confirmed_user(name2, password))
 
 
 def test_authorize():
@@ -444,7 +453,7 @@ def test_get_content():
     # 10MB is read in
     with open("big1.txt", "rb") as file:
         content1 = file.read()
-        content_hash = admin.get_content(content1)
+        content_hash = uledger.ipfs_hash(content1)
     content2 = admin.get_content(content_hash)
     assert content1 == content2
 
@@ -452,7 +461,7 @@ def test_get_content():
     # 20 MB is read in
     with open("big2.txt", "rb") as file:
         content1 = file.read()
-        content_hash = admin.get_content(content1)
+        content_hash = uledger.ipfs_hash(content1)
     content2 = admin.get_content(content_hash)
     assert content1 == content2
 
@@ -460,7 +469,7 @@ def test_get_content():
     # 30MB read in
     with open("big3.txt", "rb") as file:
         content1 = file.read()
-        content_hash = admin.get_content(content1)
+        content_hash = uledger.ipfs_hash(content1)
     content2 = admin.get_content(content_hash)
     assert content1 == content2
 
@@ -468,7 +477,7 @@ def test_get_content():
     # 40MB read in
     with open("big4.txt", "rb") as file:
         content1 = file.read()
-        content_hash = admin.get_content(content1)
+        content_hash = uledger.ipfs_hash(content1)
     content2 = admin.get_content(content_hash)
     assert content1 == content2
 
@@ -476,7 +485,7 @@ def test_get_content():
     # 50MB read in
     with open("big5.txt", "rb") as file:
         content1 = file.read()
-        content_hash = admin.get_content(content1)
+        content_hash = uledger.ipfs_hash(content1)
     content2 = admin.get_content(content_hash)
     assert content1 == content2
 
