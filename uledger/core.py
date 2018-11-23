@@ -22,6 +22,7 @@ References:
 """
 
 import collections
+import io
 import json
 import operator
 import os
@@ -83,6 +84,44 @@ class BlockchainUser:
     # ----------------
     # Internal Methods
     # ----------------
+
+    def _add_from_stream(self, stream, filename, tags=None, coerce=False):
+        """ Adds content from a stream or file object to the blockchain.
+
+        This method is intended to be used via add_bytes() or add_file(), but
+        it is easy enough to use directly if you'd like.
+
+        The acting user must have 'can_write' permissions.
+
+        Argmuents:
+            stream (any): the stream or file object to record to the
+                blockchain. The stream cannot exceed 50MB. Most likely, this
+                will belong to one of the classes defined in the io module
+                from the standard library such as BytesIO, but any file object
+                should work as long as it supports seek() and read() methods.
+            filename (str): the filename to record as metadata in the new
+                blockchain transaction. The filename MUST contain an extension.
+            tags (any): metadata to record alongside the stream
+            coerce (bool): coerce (bool): if True, forces the metadata (tags)
+                into proper form (see _normalize() for details).
+
+        Returns:
+            dict: the new transaction's Transaction Object
+        """
+        if not os.path.splitext(filename)[1]:
+            raise OSError("You must provide a file name with an extension.")
+        else:
+            if stream.seek(0, os.SEEK_END) > 50 * 1024 * 1024:
+                raise OSError("The stream cannot be larger than 50MB.")
+            stream.seek(0, os.SEEK_SET)
+
+        fields = {
+            "user": self._user(),
+            "content_file": (filename, stream),
+            "metadata": self._normalize(tags, coerce=coerce)
+        }
+
+        return self._call_api("/store/add", fields)["result"]
 
     def _call_api(self, endpoint, fields):
         """ Calls the API.
@@ -441,54 +480,94 @@ class BlockchainUser:
     # Data Management
     # ---------------
 
-    def add_file(self, filename, tags=None, coerce=False):
+    def add_bytes(self, b, filename, tags=None, coerce=False):
+        """ Adds a bytestring to the blockchain.
+
+        If you want to store content as-is, use this entrypoint or add_file().
+
+        The acting user must have 'can_write' permissions.
+
+        Args:
+            b (bytes): a bytestring to add to the blockchain.
+                The bytestring cannot exceed 50MB.
+            filename (str): the name to give to the server-side file that will
+                house the bytestring. The filename must contain an extension.
+            tags (any): metadata to record alongside the bytestring
+            coerce (bool): if True, forces the metadata (tags) into proper
+                form (see _normalize() for details).
+
+        Returns:
+            dict: the new transaction's Transaction Object.
+        """
+        stream = io.BytesIO(b)
+        return self._add_from_stream(stream, filename, tags, coerce)
+
+    def add_file(self, path, tags=None, coerce=False):
         """ Adds a file to the blockchain.
 
-        The blockchain accepts arbitrary data, so you can add any kind of
-        file, from raw text to executables and compressed archives.
-        The file must have an extension and cannot exceed 50MB.
+        If you want to store content as-is, use this entrypoint or add_bytes().
+
+        The file MUST have an extension and be 50MB or less or your request
+        will be rejected. File names are sanitized server-side, so there is no
+        risk of a directory traversal attack.
 
         The acting user must have 'can_write' permissions.
 
         Args:
-            filename (str): the name of / path to the file to upload
+            path (str): the absolute path to the file you want to add.
             tags (any): metadata to record alongside the file
-            coerce (bool): whether the metadata should be forced into the
-                proper form (see _normalize() for details)
+            coerce (bool): if True, forces the metadata (tags) into proper
+                form (see _normalize() for details).
+
+        Returns:
+            dict: the new transaction's Transaction Object.
+        """
+        filename = os.path.basename(path)
+        with open(path, 'rb') as stream:
+            return self._add_from_stream(stream, filename, tags, coerce)
+
+    def add_object(self, obj, tags=None, coerce=False, mode='json', **kwargs):
+        """ Serializes an object into a string and adds it to the blockchain.
+
+        If want to store your content in string form, use this entrypoint.
+        Otherwise, if you want to add raw binary content with no data mangling,
+        use either add_file() or add_bytes().
+
+        If you would like to extend this function's JSON encoding capabilities,
+        (for example, if you're using objects that can't naturally be converted
+        to JSON strings), you can subclass json.JSONEncoder and pass it to this
+        function as a keyword argument using 'cls=<MyJSONEncoder>'.
+
+        The acting user must have 'can_write' permissions.
+
+        Args:
+            obj (any): the object to record to the blockchain.
+            tags (any): metadata to record alongside the serialized object
+            coerce (bool): if True, forces the metadata (tags) into proper
+                form (see _normalize() for details).
+            mode (str): controls how the object will be converted into a string.
+                'json' will serialize the object as a JSON-formatted string.
+                'str' will use the object's __str__ method. 'repr' will use
+                the object's __repr__ method.
+            kwargs (any): keyword arguments to control JSON serialization
+                behavior. Any of the keyword arguments available in
+                json.dumps() are available and will be passed to it directly.
 
         Raises:
-            OSError: if the file does not have an extension or exceeds 50MB
+            ValueError: if mode is not 'json', 'str', or 'repr'.
 
         Returns:
             dict: the new transaction's Transaction Object
         """
-        if os.stat(filename).st_size > 52428800:
-            raise OSError("The maximum file size is 50MB.")
-        elif not os.path.splitext(filename)[1]:
-            raise OSError("Files on the blockchain must have an extension.")
+        if mode == 'json':
+            content_string = json.dumps(obj, kwargs)
+        elif mode == 'str':
+            content_string = str(obj)
+        elif mode == 'repr':
+            content_string = repr(obj)
+        else:
+            raise ValueError("'mode' must be 'json', 'str', or 'repr'.")
 
-        fields = {
-            "user": self._user(),
-            "content_file": (filename, open(filename, mode='rb')),
-            "metadata": self._normalize(tags, coerce=coerce)
-        }
-
-        return self._call_api("/store/add", fields)["result"]
-
-    def add_string(self, content_string, tags=None, coerce=False):
-        """ Adds a string to the blockchain.
-
-        The acting user must have 'can_write' permissions.
-
-        Args:
-            content_string (str): the string to record to the blockchain
-            tags (any): metadata to record to the blockchain
-            coerce (bool): whether the metadata should be forced into the
-                proper form (see _normalize() for details)
-
-        Returns:
-            dict: the new transaction's Transaction Object
-        """
         fields = {
             "user": self._user(),
             "content_string": content_string,
@@ -535,8 +614,8 @@ class BlockchainUser:
         The acting user must have 'can_read' permissions.
 
         Args:
-            coerce (bool): whether the metadata should be forced into the
-                proper form (see _normalize() for details)
+            coerce (bool): if True, forces the metadata (tags) into proper
+                form (see _normalize() for details).
             with_content (bool): if set to True, a 'content' field will be
                 populated for each Transaction Object when possible. If string
                 content is encountered, it will be added to the content field.
