@@ -499,8 +499,8 @@ class BlockchainUser:
         Returns:
             dict: the new transaction's Transaction Object.
         """
-        stream = io.BytesIO(b)
-        return self._add_from_stream(stream, filename, tags, coerce)
+        with io.BytesIO(b) as stream:
+            return self._add_from_stream(stream, filename, tags, coerce)
 
     def add_file(self, path, tags=None, coerce=False):
         """ Adds a file to the blockchain.
@@ -560,7 +560,7 @@ class BlockchainUser:
             dict: the new transaction's Transaction Object
         """
         if mode == 'json':
-            content_string = json.dumps(obj, kwargs)
+            content_string = json.dumps(obj, **kwargs)
         elif mode == 'str':
             content_string = str(obj)
         elif mode == 'repr':
