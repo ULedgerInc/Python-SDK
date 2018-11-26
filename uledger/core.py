@@ -108,12 +108,10 @@ class BlockchainUser:
         Returns:
             dict: the new transaction's Transaction Object
         """
-        if not os.path.splitext(filename)[1]:
-            raise OSError("You must provide a file name with an extension.")
-        else:
-            if stream.seek(0, os.SEEK_END) > 50 * 1024 * 1024:
-                raise OSError("The stream cannot be larger than 50MB.")
-            stream.seek(0, os.SEEK_SET)
+        # Check if the stream contains more than 50MB of content.
+        if stream.seek(0, os.SEEK_END) > 50 * 1024 * 1024:
+            raise OSError("The stream cannot be larger than 50MB.")
+        stream.seek(0, os.SEEK_SET)
 
         fields = {
             "user": self._user(),
@@ -155,23 +153,33 @@ class BlockchainUser:
 
         return response
 
-    def _call_api2(self, endpoint, fields, download=False):
+    def _call_api2(self, endpoint, fields, download=False, decode=False):
         """ Calls the API and streams its response.
+
+        This function prefers to return the raw response content as a
+        bytestring. You can set decode to True to try and have this
+        function try to decode the response content using utf-8.
+        Alternatively, you can set download to True to have the raw content
+        written to a file in your Downloads folder instead.
+
+        # TODO allow tag-based decoding behavior
 
         Args:
             endpoint (str): the API endpoint to request from
             fields (dict): the fields used to construct the multipart request
-            download (bool): if download is True, then any files that are
-                sent back with the response will be downloaded. Otherwise,
-                those files will be ignored.
+            decode (bool): try to decode the response bytestring using utf-8.
+                If decoding fails, the bytestring will be used as a fallback.
+            download (bool): if download is True, the raw response bytestring
+                will be saved to the Downloads folder instead of being returned.
 
         Raises:
             APIError: if something went wrong with the API
             requests.RequestException: if something went wrong with the request
 
         Returns:
-            dict: the API response including 0 or 1 Transaction Objects with
-                a 'content' field and potentially an 'extension' field.
+            bytes: if decode is False
+            str: if decode is True and decoding succeeds
+            None: if download is True
         """
         # Format the request information
         url = "{0}{1}".format(self.url, endpoint)
@@ -182,10 +190,15 @@ class BlockchainUser:
         r = requests.post(url, data=data, headers=headers, timeout=10, stream=True)
         r.raise_for_status()
 
-        # Stream any file in the response to the Downloads folder.
-        if download and "." in r.headers["Content-Disposition"]:
+        # Check if the API server responded with an error message.
+        if r.content[:8] == b'"Error: ':
+            error_msg = r.content[8:].encode('utf-8').rstrip('\n\"')
+            raise APIError(error_msg, fields)
+
+        # Stream the response to a unique file in the user's Downloads folder.
+        if download:
             filename = endpoint.rsplit(sep='=', maxsplit=1)[1]
-            dest = os.path.join(os.path.expanduser("~"), "Downloads", filename)
+            dest = os.path.join(os.path.expanduser('~'), 'Downloads', filename)
             with open(dest, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=4096):
                     if chunk:  # filter out keep-alive chunks
@@ -193,12 +206,16 @@ class BlockchainUser:
             r.close()
             return None
 
-        # Convert the response to text and check it for API errors.
-        r.encoding = 'utf-8'
-        response = r.text  # set to 'replace' by default
-        if response.startswith('"Error: '):
-            error_msg = response[8:].rstrip('\"\n')
-            raise APIError(error_msg, fields)
+        # Try to decode the content using utf-8.
+        # If decoding fails, fall back to the raw response bytestring.
+        if decode:
+            r.encoding = 'utf-8'
+            try:
+                response = r.text
+            except UnicodeDecodeError:
+                response = r.content
+        else:
+            response = r.content
 
         return response
 
@@ -568,6 +585,12 @@ class BlockchainUser:
         else:
             raise ValueError("'mode' must be 'json', 'str', or 'repr'.")
 
+        # Serializations starting with '"Error: ' are disallowed because the
+        # API server uses the same pattern to designate actual error messages.
+        if content_string.startswith('"Error: '):
+            raise ValueError(
+                "The serialization of 'obj' cannot begin with '\"Error: '\"")
+
         fields = {
             "user": self._user(),
             "content_string": content_string,
@@ -576,7 +599,7 @@ class BlockchainUser:
 
         return self._call_api("/store/add", fields)["result"]
 
-    def get_content(self, content_hash, download=False):
+    def get_content(self, content_hash, download=False, decode=False):
         """ Retrieves the blockchain content indexed by content_hash.
 
         Each piece of content stored on the blockchain is indexed by its
@@ -584,22 +607,28 @@ class BlockchainUser:
         multihash and return the content that created it. This is similar
         to the scheme used by the InterPlanetary File System protocol.
 
+        By default, the content will be returned as a bytestring. However,
+        you can set decode to True to try and decode the content with utf-8.
+        Alternatively, you can set download to True to have this function write
+        the content to a file in your Downloads folder instead of returning it.
+
         The acting user must have 'can_read' permissions.
 
         Args:
             content_hash (str): a multihash to search for in the blockchain
-            download (bool): when set to True and content_hash points to a file,
-                then the file will be downloaded. Otherwise the file content
-                will be ignored.
+            decode (bool): try to decode the response bytestring using utf-8.
+                If decoding fails, the bytestring will be used as a fallback.
+            download (bool): if download is True, the raw response bytestring
+                will be saved to the Downloads folder instead of being returned.
 
         Returns:
-            str: if content_hash points to a string, the string is returned
-            None: if content_hash points to a file or does not appear on the
-                blockchain, None is returned
+            bytes: if decode is False
+            str: if decode is True and decoding succeeds
+            None: if download is True
         """
         endpoint = "/store/content?hash={0}".format(content_hash)
         fields = {"user": self._user()}
-        return self._call_api2(endpoint, fields, download=download)
+        return self._call_api2(endpoint, fields, download, decode)
 
     def get_transactions(self, coerce=False, with_content=False,
                          ensure_order=True, reverse=True, **kwargs):
