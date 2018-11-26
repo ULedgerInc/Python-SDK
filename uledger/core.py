@@ -198,7 +198,7 @@ class BlockchainUser:
         # Stream the response to a unique file in the user's Downloads folder.
         if download:
             filename = endpoint.rsplit(sep='=', maxsplit=1)[1]
-            dest = os.path.join(os.path.expanduser('~'), 'Downloads', filename)
+            dest = os.path.join(os.path.expanduser('~/Downloads'), filename)
             with open(dest, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=4096):
                     if chunk:  # filter out keep-alive chunks

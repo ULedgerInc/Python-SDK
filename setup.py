@@ -12,5 +12,5 @@ setup(
     url='https://github.com/ULedgerInc/Python-SDK',
     packages=['uledger'],
     install_requires=['requests', 'requests_toolbelt', 'pymultihash', 'base58'],
-    python_requires='>=3.6'
+    python_requires='>=3.5'
 )
