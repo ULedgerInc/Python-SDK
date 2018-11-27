@@ -109,7 +109,11 @@ class BlockchainUser:
             dict: the new transaction's Transaction Object
         """
         # Check if the stream contains more than 50MB of content.
-        if stream.seek(0, os.SEEK_END) > 50 * 1024 * 1024:
+        # tell() shouldn't normally be needed since seek() returns the current
+        # position in the stream, but SpooledTemporaryFile poorly implements
+        # io.IOBase its seek method incorrectly returns None.
+        stream.seek(0, os.SEEK_END)
+        if stream.tell() > 50 * 1024 * 1024:
             raise OSError("The stream cannot be larger than 50MB.")
         stream.seek(0, os.SEEK_SET)
 
