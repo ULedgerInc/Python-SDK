@@ -35,13 +35,13 @@ from .exceptions import APIError
 
 
 class BlockchainUser:
-    """ Creates an interface between a user and a blockchain.
+    """ A programmatic interface between a user and a ULedger blockchain.
 
     Every ULedger blockchain has its own URL, API token, and users (as well
     as a controlling super admin). Each user has their own unique access key,
     secret key, and permissions.
 
-    To send requests to a blockchain, you will need its URL, token, and a
+    To create a BlockchainUser object, you will need its URL, token, and a
     key-pair belonging to one of its users. The user in question must also
     have permission to perform the requested action.
 
@@ -52,6 +52,8 @@ class BlockchainUser:
     Users can have any combination of 'can_read', 'can_write', 'can_add_user',
     and 'can_add_permission' permissions. The super admin has all four
     permissions and cannot have their permissions modified by anyone.
+    Users with 'can_add_permission' permissions are effectively admins and can
+    grant and revoke every permission from any user except the super admin.
 
     'can_read': the user can read content from the blockchain
     'can_write': the user can write content to the blockchain
@@ -94,13 +96,13 @@ class BlockchainUser:
         The acting user must have 'can_write' permissions.
 
         Argmuents:
-            stream (any): the stream or file object to record to the
-                blockchain. The stream cannot exceed 50MB. Most likely, this
-                will belong to one of the classes defined in the io module
-                from the standard library such as BytesIO, but any file object
-                should work as long as it supports seek() and read() methods.
+            stream (io.IOBase): the stream or file object to record to the
+                blockchain. The stream cannot exceed 50MB. The stream object
+                should probably belong to a subclass of io.IOBase, but any
+                file object should work as long as it supports proper seek(),
+                tell(), and read() methods.
             filename (str): the filename to record as metadata in the new
-                blockchain transaction. The filename MUST contain an extension.
+                blockchain transaction.
             tags (any): metadata to record alongside the stream
             coerce (bool): coerce (bool): if True, forces the metadata (tags)
                 into proper form (see _normalize() for details).
@@ -111,7 +113,7 @@ class BlockchainUser:
         # Check if the stream contains more than 50MB of content.
         # tell() shouldn't normally be needed since seek() returns the current
         # position in the stream, but SpooledTemporaryFile poorly implements
-        # io.IOBase its seek method incorrectly returns None.
+        # io.IOBase and has its seek() method incorrectly return None instead.
         stream.seek(0, os.SEEK_END)
         if stream.tell() > 50 * 1024 * 1024:
             raise OSError("The stream cannot be larger than 50MB.")
@@ -240,7 +242,7 @@ class BlockchainUser:
             md (any): the variable or iterable that will be normalized into
                 a metadata list. md can be None, a regular data type,
                 a dictionary, or any iterable that supports __iter__().
-                Note: str and bytes objects are treated as a single value.
+                str and bytes objects are treated as a single value.
             coerce (bool): if coerce is set to True, the metadata list will be
                 forcibly shortened to 50 tags of no more than 50 characters
                 each. If False, the original data will not be modified.
@@ -310,7 +312,7 @@ class BlockchainUser:
         There are no restrictions on access keys, but the API requires all
         secret keys to be at least 8 characters long and contain one lowercase
         letter, one uppercase letter, one digit, and one punctuation mark.
-        Use the helpers.generate_secret_key() function to generate one.
+        Use uledger.helpers.generate_secret_key() to generate a random one.
 
         Args:
             name (str): the name to give to the super admin
@@ -349,7 +351,7 @@ class BlockchainUser:
         """ Confirms a new user.
 
         After adding a user to the blockchain, you must also confirm them.
-        The API server will reject requests from unconfirmed users.
+        The API server will reject all requests from unconfirmed users.
 
         To confirm a user, they must first be added through the new_user method.
         However, when possible, we recommend that you use new_confirmed_user()
@@ -429,7 +431,7 @@ class BlockchainUser:
 
         Once a new user is created, they MUST be confirmed with the
         confirm_user() method before they can take any actions. Unconfirmed
-        users will have all of their requests rejected.
+        users will have all of their requests rejected by the API server.
 
         When possible, we recommend that you use new_confirmed_user() instead
         of using new_user() and confirm_user() separately; it's easier to use
@@ -452,9 +454,9 @@ class BlockchainUser:
 
         The acting user must have 'can_add_user' permissions.
 
-        When possible, we recommend that you use new_confirmed_user() instead
-        of using new_user() and confirm_user() separately; it's easier to use
-        and provides better continuity.
+        When possible, we recommend that you use this method instead of using
+        new_user() and confirm_user() separately; it's easier to use and
+        provides better continuity.
 
         Args:
             name (str): a name for the new user. Users can share names.
@@ -501,7 +503,7 @@ class BlockchainUser:
     # Data Management
     # ---------------
 
-    def add_bytes(self, b, filename, tags=None, coerce=False):
+    def add_bytes(self, b, tags=None, filename="", coerce=False):
         """ Adds a bytestring to the blockchain.
 
         If you want to store content as-is, use this entrypoint or add_file().
@@ -511,9 +513,9 @@ class BlockchainUser:
         Args:
             b (bytes): a bytestring to add to the blockchain.
                 The bytestring cannot exceed 50MB.
-            filename (str): the name to give to the server-side file that will
-                house the bytestring. The filename must contain an extension.
             tags (any): metadata to record alongside the bytestring
+            filename (str): an optional file name that will be stored as
+                content metadata.
             coerce (bool): if True, forces the metadata (tags) into proper
                 form (see _normalize() for details).
 
@@ -526,11 +528,12 @@ class BlockchainUser:
     def add_file(self, path, tags=None, coerce=False):
         """ Adds a file to the blockchain.
 
-        If you want to store content as-is, use this entrypoint or add_bytes().
+        If you want to store content as-is, use this method, add_bytes(), or
+        _add_from_stream().
 
-        The file MUST have an extension and be 50MB or less or your request
-        will be rejected. File names are sanitized server-side, so there is no
-        risk of a directory traversal attack.
+        The file must be 50MB or less or your request will be rejected.
+        File names are used for metadata but not for server-side storage,
+        so there is no risk of a directory traversal attack.
 
         The acting user must have 'can_write' permissions.
 
@@ -548,7 +551,7 @@ class BlockchainUser:
             return self._add_from_stream(stream, filename, tags, coerce)
 
     def add_object(self, obj, tags=None, coerce=False, mode='json', **kwargs):
-        """ Serializes an object into a string and adds it to the blockchain.
+        """ Serializes an object adds it to the blockchain.
 
         If want to store your content in string form, use this entrypoint.
         Otherwise, if you want to add raw binary content with no data mangling,
@@ -571,8 +574,8 @@ class BlockchainUser:
                 'str' will use the object's __str__ method. 'repr' will use
                 the object's __repr__ method.
             kwargs (any): keyword arguments to control JSON serialization
-                behavior. Any of the keyword arguments available in
-                json.dumps() are available and will be passed to it directly.
+                behavior. All of the keyword arguments available in json.dumps()
+                are available and will be passed to it directly.
 
         Raises:
             ValueError: if mode is not 'json', 'str', or 'repr'.
@@ -604,12 +607,13 @@ class BlockchainUser:
         return self._call_api("/store/add", fields)["result"]
 
     def get_content(self, content_hash, download=False, decode=False):
-        """ Retrieves the blockchain content indexed by content_hash.
+        """ Retrieves content on the blockchain from its hash.
 
         Each piece of content stored on the blockchain is indexed by its
         SHA2-256 multihash. This method will search the blockchain for a
         multihash and return the content that created it. This is similar
         to the scheme used by the InterPlanetary File System protocol.
+        Use uledger.helpers.ipfs_hash() to create a SHA2-256 multihash.
 
         By default, the content will be returned as a bytestring. However,
         you can set decode to True to try and decode the content with utf-8.
@@ -644,6 +648,10 @@ class BlockchainUser:
         raw string content, but it will not retrieve raw file content. Instead,
         it will provide a URL for use with get_content().
 
+        Transactions are returned from the API server in roughly ascending
+        order in pages of 100, but you can use the ensure_order argument to
+        have this method sort the transactions for you.
+
         The acting user must have 'can_read' permissions.
 
         Args:
@@ -653,15 +661,14 @@ class BlockchainUser:
                 populated for each Transaction Object when possible. If string
                 content is encountered, it will be added to the content field.
                 If file content is encountered, the content field will be
-                populated with a URL to download the file later. Files will
-                also populate an 'extension' field with their file extension.
+                populated with a URL to download the file from later.
+                A file 'extension' field will always be populated.
             ensure_order (bool): if set to True, transactions will be returned
                 in sorted order. By default, transactions are not guaranteed
                 to be returned in sorted order.
-            reverse (bool): if ensure_order is True, reverse will control the
-                order. If reverse is False, then the transactions will be sorted
-                in ascending order. If reverse if True, they will be sorted in
-                descending order.
+            reverse (bool): if ensure_order is True, reverse will be used to
+                control the sorting order - True for descending order (default)
+                and False for ascending order.
 
         Query Args (kwargs):
             transaction_hash (str): a transaction hash to search for on the
@@ -676,7 +683,7 @@ class BlockchainUser:
                 In order to match, a transaction must contain one or more of
                 the tags specified here. Incompatible with tags_all.
             last_transactions (int): the number of most recent transactions to
-                to request from the blockchain
+                request from the blockchain
             range (dict): a time range to search on the blockchain. This must
                 be a {"From": A, "To": B} dictionary where A and B are Unix
                 timestamps. A and be must be non-negative integers and A must
@@ -750,7 +757,7 @@ class BlockchainUser:
 
     def verify(self, transaction_hash="", content_hash="",
                content_string="", filename=""):
-        """ Checks whether something appears on the blockchain.
+        """ Checks whether a hash, string, or file appears on the blockchain.
 
         Only one parameter will be used, prioritized from left to right:
             transaction_hash > content_hash > content_string > filename.
@@ -759,9 +766,8 @@ class BlockchainUser:
 
         Args:
             transaction_hash (str): the transaction hash you want to verify.
-                Transaction hashes are returned from Transaction Objects.
             content_hash (str): the SHA2-256 multihash of the content you
-                want to verify. Use helpers.ipfs_hash() to create this hash.
+                want to verify (see helpers.ipfs_hash()).
             content_string (str): the string you want to verify
             filename (str): the name of / the path to the file to verify
 
@@ -785,5 +791,5 @@ class BlockchainUser:
             if str(e) == 'The transaction is not registered.':
                 return False
             else:
-                raise
+                raise e
         return True
