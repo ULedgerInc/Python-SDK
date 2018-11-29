@@ -407,20 +407,31 @@ class BlockchainUser:
     def get_users(self, name="", access_key=""):
         """ Gets a list of users with access to the blockchain.
 
+        This function takes 0-1 arguments. If no arguments are given, every
+        user on the blockchain will be returned. If a name or access_key is
+        specified, the matching user(s) will be returned instead. name and
+        access_key cannot be specified together.
+
         The acting user must have 'can_read' permissions.
 
         Args:
-            name (str): user name to search for. If name is specified, the
-                user or users with the exact same name will be returned.
-                If name is left unspecified, a list of every user on the
-                acting user's blockchain will be returned.
+            name (str): a user name to search for. If a name is specified, the
+                user(s) with the exact same name (if any) will be returned.
+            access_key (str): an access key to search for. If an access key is
+                specified, the matching user will be returned.
 
         Returns:
-            list of dict: if a matching name is found, the matching user(s)
-                is/are returned as a list of dictionaries.
-            []: if no matches are found
+            list of dict: if a matching name or access key is found, the
+                matching user(s) is/are returned as a list of dictionaries.
+                If no arguments are specified, this will be a list of every
+                user on the blockchain instead.
+            []: if no matching name or access key is found
         """
-        fields = {"user": self._user(), "name": name, "access_key": access_key}
+        fields = {
+            "user": self._user(),
+            "name": name,
+            "access_key": access_key
+        }
         try:
             return self._call_api("/store/users", fields)["result"]
         except KeyError:  # "result" field not returned when no users are found
@@ -551,7 +562,7 @@ class BlockchainUser:
             return self._add_from_stream(stream, filename, tags, coerce)
 
     def add_object(self, obj, tags=None, coerce=False, mode='json', **kwargs):
-        """ Serializes an object adds it to the blockchain.
+        """ Serializes an object and adds it to the blockchain.
 
         If want to store your content in string form, use this entrypoint.
         Otherwise, if you want to add raw binary content with no data mangling,
@@ -574,11 +585,12 @@ class BlockchainUser:
                 'str' will use the object's __str__ method. 'repr' will use
                 the object's __repr__ method.
             kwargs (any): keyword arguments to control JSON serialization
-                behavior. All of the keyword arguments available in json.dumps()
-                are available and will be passed to it directly.
+                behavior. All of the keyword arguments available in
+                json.dumps() are available and will be passed to it directly.
 
         Raises:
-            ValueError: if mode is not 'json', 'str', or 'repr'.
+            ValueError: if mode is not 'json', 'str', or 'repr' or if the
+                object's chosen string representation begins with '"Error: '
 
         Returns:
             dict: the new transaction's Transaction Object
@@ -596,7 +608,7 @@ class BlockchainUser:
         # API server uses the same pattern to designate actual error messages.
         if content_string.startswith('"Error: '):
             raise ValueError(
-                "The serialization of 'obj' cannot begin with '\"Error: '\"")
+                "Serializations cannot begin with '\"Error: '")
 
         fields = {
             "user": self._user(),
@@ -662,7 +674,7 @@ class BlockchainUser:
                 content is encountered, it will be added to the content field.
                 If file content is encountered, the content field will be
                 populated with a URL to download the file from later.
-                A file 'extension' field will always be populated.
+                A file 'extension' field will also be populated.
             ensure_order (bool): if set to True, transactions will be returned
                 in sorted order. By default, transactions are not guaranteed
                 to be returned in sorted order.
