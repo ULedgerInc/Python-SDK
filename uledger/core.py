@@ -342,7 +342,7 @@ class BlockchainUser:
             user_to_auth_access_key=target_access_key, deactivate=True)}
         return self._call_api("/store/authorize", fields)
 
-    def get_users(self, name=""):
+    def get_users(self, name="", access_key=""):
         """ Gets a list of users with access to the blockchain.
 
         The acting user must have 'can_read' permissions.
@@ -358,7 +358,7 @@ class BlockchainUser:
                 is/are returned as a list of dictionaries.
             []: if no matches are found
         """
-        fields = {"user": self._user(), "name": name}
+        fields = {"user": self._user(), "name": name, "access_key": access_key}
         try:
             return self._call_api("/store/users", fields)["result"]
         except KeyError:  # "result" field not returned when no users are found
