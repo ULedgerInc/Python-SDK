@@ -107,9 +107,18 @@ class BlockchainUser:
             coerce (bool): coerce (bool): if True, forces the metadata (tags)
                 into proper form (see _normalize() for details).
 
+        Raises:
+            ValueError: if the stream begins with '"Error: '
+            OSError: if the stream contains more than 50MB of content
+
         Returns:
             dict: the new transaction's Transaction Object
         """
+        # Check if the stream begins with '"Error: '. The position in the file
+        # will be reset later if the stream contains less than 50MB of data.
+        if stream.read(8) == b'"Error: ':
+            raise ValueError('The stream cannot begin with '"Error: '")
+
         # Check if the stream contains more than 50MB of content.
         # tell() shouldn't normally be needed since seek() returns the current
         # position in the stream, but SpooledTemporaryFile poorly implements
@@ -522,21 +531,21 @@ class BlockchainUser:
     # Data Management
     # ---------------
 
-    def add_bytes(self, b, tags=None, filename="", coerce=False):
+    def add_bytes(self, b, filename="", tags=None, coerce=False):
         """ Adds a bytestring to the blockchain.
 
-        If you want to store content as-is, use this entrypoint or add_file().
+        If you want to store content as-is, use this method or add_file().
 
         The acting user must have 'can_write' permissions.
 
         Args:
             b (bytes): a bytestring to add to the blockchain.
                 The bytestring cannot exceed 50MB.
-            tags (any): metadata to record alongside the bytestring
             filename (str): an optional file name that will be stored as
-                content metadata.
+                content metadata
+            tags (any): metadata to record alongside the bytestring
             coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details).
+                form (see _normalize() for details)
 
         Returns:
             dict: the new transaction's Transaction Object.
@@ -547,8 +556,7 @@ class BlockchainUser:
     def add_file(self, path, tags=None, coerce=False):
         """ Adds a file to the blockchain.
 
-        If you want to store content as-is, use this method, add_bytes(), or
-        _add_from_stream().
+        If you want to store content as-is, use this method or add_bytes().
 
         The file must be 50MB or less or your request will be rejected.
         File names are used for metadata but not for server-side storage,
