@@ -14,7 +14,7 @@
 
 """ This module contains helper functions for the ULedger SDK. """
 
-import collections
+from collections import abc
 import random
 
 import base58
@@ -34,8 +34,8 @@ def flatten(iterable):
     Code adapted from: https://stackoverflow.com/a/2158532
     """
     for el in iterable:
-        if isinstance(el, collections.Iterable) and not isinstance(el, (str, bytes)):
-            yield from flatten(iterable)
+        if isinstance(el, abc.Iterable) and not isinstance(el, (str, bytes)):
+            yield from flatten(el)
         else:
             yield el
 
