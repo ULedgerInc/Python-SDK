@@ -21,7 +21,7 @@ References:
     https://stackoverflow.com/a/16696317
 """
 
-import collections
+from collections import abc
 import io
 import json
 import operator
@@ -267,7 +267,7 @@ class BlockchainUser:
         elif isinstance(md, dict):
             tag_list = ["{0}={1}".format(key, value)
                         for key, value in md.items()]
-        elif not isinstance(md, collections.Iterable):
+        elif not isinstance(md, abc.Iterable):
             tag_list = [str(md)]
         else:
             tag_list = list(map(str, helpers.flatten(md)))
@@ -478,10 +478,18 @@ class BlockchainUser:
                 If new_secret_key is not specified, the user's temporary secret
                 key will become their permanent secret key.
 
+        Raises:
+            ValueError: if new_secret_key does not contain at least one
+                lowercase, uppercase, digit, and punctuation mark
+
         Returns:
             BlockchainUser: created from your blockchain's URL and token
                 and the confirmed user's new access key and secret key
         """
+        if not helpers.validate_secret_key(new_secret_key):
+            raise ValueError(
+                'Your secret key must be 8 characters long and contain at'
+                'least one lowercase, uppercase, digit, and punctuation mark.')
         access_key, secret_key = self.new_user(name)
         return self.confirm_user(access_key, secret_key, new_secret_key)
 
@@ -561,12 +569,12 @@ class BlockchainUser:
         with open(path, 'rb') as stream:
             return self._add_from_stream(stream, filename, tags, coerce)
 
-    def add_object(self, obj, tags=None, coerce=False, mode='json', **kwargs):
+    def add_object(self, obj, mode, tags=None, coerce=False, **kwargs):
         """ Serializes an object and adds it to the blockchain.
 
-        If want to store your content in string form, use this entrypoint.
-        Otherwise, if you want to add raw binary content with no data mangling,
-        use either add_file() or add_bytes().
+        If want to store your content in string form, use this method.
+        Otherwise, if you want to add raw binary content with no data
+        mangling, use add_file() or add_bytes().
 
         If you would like to extend this function's JSON encoding capabilities,
         (for example, if you're using objects that can't naturally be converted
@@ -581,26 +589,26 @@ class BlockchainUser:
             coerce (bool): if True, forces the metadata (tags) into proper
                 form (see _normalize() for details).
             mode (str): controls how the object will be converted into a string.
-                'json' will serialize the object as a JSON-formatted string.
                 'str' will use the object's __str__ method. 'repr' will use
-                the object's __repr__ method.
+                the object's __repr__ method. 'json' will serialize the object
+                as a JSON-formatted string using a JSONEncoder.
             kwargs (any): keyword arguments to control JSON serialization
                 behavior. All of the keyword arguments available in
                 json.dumps() are available and will be passed to it directly.
 
         Raises:
-            ValueError: if mode is not 'json', 'str', or 'repr' or if the
-                object's chosen string representation begins with '"Error: '
+            ValueError: if mode is not 'json', 'str', or 'repr'
+                        or if the object's serialization begins with '"Error: '
 
         Returns:
             dict: the new transaction's Transaction Object
         """
-        if mode == 'json':
-            content_string = json.dumps(obj, **kwargs)
-        elif mode == 'str':
+        if mode == 'str':
             content_string = str(obj)
         elif mode == 'repr':
             content_string = repr(obj)
+        elif mode == 'json':
+            content_string = json.dumps(obj, **kwargs)
         else:
             raise ValueError("'mode' must be 'json', 'str', or 'repr'.")
 
@@ -803,5 +811,5 @@ class BlockchainUser:
             if str(e) == 'The transaction is not registered.':
                 return False
             else:
-                raise e
+                raise
         return True
