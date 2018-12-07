@@ -13,13 +13,7 @@
 #    limitations under the License.
 
 """ This is the core module for the ULedger SDK. It implements the
-BlockchainUser class, whose objects act as an interface to the ULedger API.
-
-References:
-    https://stackoverflow.com/a/2164383
-    https://stackoverflow.com/a/2466207
-    https://stackoverflow.com/a/16696317
-"""
+BlockchainUser class, whose objects act as interfaces to the ULedger API. """
 
 from collections import abc
 import io
@@ -171,11 +165,11 @@ class BlockchainUser:
     def _call_api2(self, endpoint, fields, download=False, decode=False):
         """ Calls the API and streams its response.
 
-        This function prefers to return the raw response content as a
-        bytestring. You can set decode to True to try and have this
-        function try to decode the response content using utf-8.
-        Alternatively, you can set download to True to have the raw content
-        written to a file in your Downloads folder instead.
+        This method prefers to return the raw response content as a
+        bytestring, but you can set decode to True to try and have it
+        decode the response content using utf-8. Alternatively, you
+        can set download to True to have the raw content written to a
+        file in your Downloads folder instead.
 
         # TODO allow tag-based decoding behavior
 
@@ -593,13 +587,13 @@ class BlockchainUser:
 
         Args:
             obj (any): the object to record to the blockchain.
-            tags (any): metadata to record alongside the serialized object
-            coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details).
             mode (str): controls how the object will be converted into a string.
                 'str' will use the object's __str__ method. 'repr' will use
                 the object's __repr__ method. 'json' will serialize the object
                 as a JSON-formatted string using a JSONEncoder.
+            tags (any): metadata to record alongside the serialized object
+            coerce (bool): if True, forces the metadata (tags) into proper
+                form (see _normalize() for details).
             kwargs (any): keyword arguments to control JSON serialization
                 behavior. All of the keyword arguments available in
                 json.dumps() are available and will be passed to it directly.
@@ -658,7 +652,7 @@ class BlockchainUser:
                 will be saved to the Downloads folder instead of being returned.
 
         Returns:
-            bytes: if decode is False
+            bytes: if decode is False or if decoding fails
             str: if decode is True and decoding succeeds
             None: if download is True
         """
@@ -667,7 +661,7 @@ class BlockchainUser:
         return self._call_api2(endpoint, fields, download, decode)
 
     def get_transactions(self, coerce=False, with_content=False,
-                         ensure_order=True, reverse=True, **kwargs):
+                         sort=True, reverse=False, **kwargs):
         """ Queries the blockchain for transactions.
 
         This method is intended to retrieve transaction metadata, not content.
@@ -691,12 +685,12 @@ class BlockchainUser:
                 If file content is encountered, the content field will be
                 populated with a URL to download the file from later.
                 A file 'extension' field will also be populated.
-            ensure_order (bool): if set to True, transactions will be returned
-                in sorted order. By default, transactions are not guaranteed
+            sort (bool): if set to True, transactions will be returned in
+                sorted order. By default, transactions are not guaranteed
                 to be returned in sorted order.
             reverse (bool): if ensure_order is True, reverse will be used to
-                control the sorting order - True for descending order (default)
-                and False for ascending order.
+                control the sorting order: False for ascending order (default)
+                and True for descending order.
 
         Query Args (kwargs):
             transaction_hash (str): a transaction hash to search for on the
@@ -778,7 +772,7 @@ class BlockchainUser:
                 kwargs["page"] += 1
                 fields["metadata"] = json.dumps(kwargs)  # TODO do less work?
 
-        if ensure_order:
+        if sort:
             transactions.sort(key=operator.itemgetter("timestamp"), reverse=reverse)
 
         return transactions
