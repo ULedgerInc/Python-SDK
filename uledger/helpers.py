@@ -71,4 +71,5 @@ def validate_secret_key(password):
             any(c.islower() for c in password) and
             any(c.isdigit() for c in password) and
             any(c in charsets[3] for c in password)):
-        raise ValueError("Your password is too weak.")
+        return False
+    return True
