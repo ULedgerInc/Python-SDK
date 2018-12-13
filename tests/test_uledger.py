@@ -36,7 +36,7 @@ except (ImportError, SystemError, ValueError):
 
 APIError = uledger.APIError
 
-creds = json.load(open("creds.txt"))
+creds = json.load(open(os.path.join(os.path.dirname(__file__), "creds.txt")))
 
 url = creds["url"]
 token = creds["token"]
@@ -66,7 +66,7 @@ def test_add_file():
 
     # Normal File
     tags1 = ["file"]
-    filepath1 = "report2.html"
+    filepath1 = "hello_world.txt"
     admin.add_file(filepath1, tags1)
     print(1, 'OK')
 
@@ -80,13 +80,17 @@ def test_add_file():
         print(2, 'OK')
 
 
-def test_add_string(blns=False):
+def test_flatten(obj):
+    pass
+
+
+def test_add_object(blns=False):
     if blns:
         with open("blns.json", "r") as file:
             blns = json.load(file)
         for ns in blns:
             try:
-                response = admin.add_string(ns, "blns")
+                response = admin.add_object(ns, "blns")
             except APIError as e:
                 print(e, ns)
             else:
@@ -104,54 +108,54 @@ def test_add_string(blns=False):
     tags = ["sampleTag1", "sampleTag2"]
 
     # Break Tag Typing
-    admin.add_string(string1, None)  # TH: QmdBdyUWgCBuJTiPn3CWwSTQdt5Wqs8QPQTNAYWACMKFWz
+    admin.add_object(string1, 'str', None)  # TH: QmdBdyUWgCBuJTiPn3CWwSTQdt5Wqs8QPQTNAYWACMKFWz
     print(-1, 'OK')
 
-    admin.add_string(string1, [])    # TH: QmaiN7DrKMeXY3vD5qTrwTohdhTYrRVKGQ6UorbMhxnCBa
+    admin.add_object(string1, 'str', [])    # TH: QmaiN7DrKMeXY3vD5qTrwTohdhTYrRVKGQ6UorbMhxnCBa
     print(-2, 'OK')
 
-    admin.add_string(string1, 1)
+    admin.add_object(string1, 'str')
     print(-3, 'OK')
 
-    admin.add_string(string1, True)
+    admin.add_object(string1, 'str', True)
     print(-4, 'OK')
 
-    print(admin.add_string(string1, "string"))
+    print(admin.add_object(string1, "str"))
     print(-5, 'OK')
 
-    admin.add_string(string1, [1])
+    admin.add_object(string1, 'str', [1])
     print(-6, 'OK')
 
-    admin.add_string(string1, [True])
+    admin.add_object(string1, 'str', [True])
     print(-7, 'OK')
 
-    admin.add_string(string1, [["hi", "there"], "hi"])
+    admin.add_object(string1, 'str', [["hi", "there"], "hi"])
     print(-8, 'OK')
 
     # Add simple content with different properties.
-    admin.add_string(string1, tags)
+    admin.add_object(string1, 'str', tags)
     print(1, 'OK')
 
-    admin.add_string(string2, tags)
+    admin.add_object(string2, 'str', tags)
     print(2, 'OK')
 
-    admin.add_string(string3, tags)
+    admin.add_object(string3, 'str', tags)
     print(3, 'OK')
 
-    admin.add_string(string4, tags)
+    admin.add_object(string4, 'str', tags)
     print(4, 'OK')
 
-    admin.add_string(string5, tags)
+    admin.add_object(string5, 'str', tags)
     print(5, 'OK')
 
     # Coercion
-    admin.add_string(string5, coerce=True)
+    admin.add_object(string5, 'str', coerce=True)
     print(6, 'OK')
 
     # Test naughty strings
     i = 7
     for ns in sns:
-        admin.add_string(ns)
+        admin.add_object(ns, 'str')
         print(i, 'OK')
         i += 1
 
@@ -172,6 +176,12 @@ def test_new_confirmed_user():
     # Test name 2
     password = uledger.generate_secret_key()
     print(admin.new_confirmed_user(name2, password))
+
+    # test a weak password
+    try:
+        admin.new_confirmed_user(name1, "weak_password")
+    except ValueError:
+        pass
 
 
 def test_authorize():
@@ -422,11 +432,11 @@ def test_get_content():
     jt4 = '("some", "tuple")'
     jt5 = '"Error: fake error 2 electric boogaloo"'
 
-    jtch1 = admin.add_string(jt1)["content_hash"]
-    jtch2 = admin.add_string(jt2)["content_hash"]
-    jtch3 = admin.add_string(jt3)["content_hash"]
-    jtch4 = admin.add_string(jt4)["content_hash"]
-    jtch5 = admin.add_string(jt5)["content_hash"]
+    jtch1 = admin.add_object(jt1, 'str')["content_hash"]
+    jtch2 = admin.add_object(jt2, 'str')["content_hash"]
+    jtch3 = admin.add_object(jt3, 'str')["content_hash"]
+    jtch4 = admin.add_object(jt4, 'str')["content_hash"]
+    jtch5 = admin.add_object(jt5, 'str')["content_hash"]
 
     # jtch1 = 'QmTKJFYRcmLdD1MuqLbuwtphHLweS4rwYD23NDfPG19TsA'
     # jtch2 = 'QmSYWkRv6v25XoehXuGwRvURMw2BEsmJK8xtLgm3oU6JLt'
@@ -438,12 +448,15 @@ def test_get_content():
     assert admin.get_content(jtch2) == jt2
     assert admin.get_content(jtch3) == jt3
     assert admin.get_content(jtch4) == jt4
-    # assert admin.get_content(jtch5) == jt5
-    # TODO Fail: "fake" error messages trip the same handling as real error messages
+    # "fake" error messages trip the same handling as real error messages
+    try:
+        admin.get_content(jtch5)
+    except ValueError:
+        pass
 
     # < 10MB
     # Returns the whole content of the file in escaped utf-8
-    with open("report2.html", "r") as file:
+    with open("hello_world.txt", "r") as file:
         content1 = file.read()
         content_hash = uledger.ipfs_hash(content1)
     content2 = admin.get_content(content_hash)
@@ -1298,7 +1311,6 @@ def test_get_transactions():
 
     # get file
     # returns a URL from which you can download the file
-    # admin.add_file("/Users/sileniia/Desktop/report2.html", tags=["report", "html"])
     transaction = admin.get_transactions(
         last_transactions=1,
         with_content=True
@@ -1439,7 +1451,7 @@ def test_verify():
     admin.authorize('3STYa5OR6J8AWE97ClHhLx1jm2PB04bw', "can_read")
 
     # verify the hash for content I know is present
-    trx = admin.add_string(string1)
+    trx = admin.add_object(string1, 'str')
     assert admin.verify(content_hash=trx["content_hash"])
     print(8, 'OK')
 
@@ -1474,8 +1486,8 @@ def test_verify():
     admin.authorize('3STYa5OR6J8AWE97ClHhLx1jm2PB04bw', "can_read")
 
     # verify a file I know is present
-    admin.add_file("report2.html", tags=["testing", "report", "html"])
-    assert admin.verify(filename="report2.html")
+    admin.add_file("hello_world.txt", tags=["testing", "hello world", "text"])
+    assert admin.verify(filename="hello_world.txt")
     print(14, 'OK')
 
     # verify a file I know is NOT present
@@ -1487,7 +1499,7 @@ def test_verify():
     # verify a file without permission
     admin.revoke('3STYa5OR6J8AWE97ClHhLx1jm2PB04bw', "can_read")
     try:
-        lumberjack.verify(filename="report2.html")
+        lumberjack.verify(filename="hello_world.txt")
     except APIError as e:
         assert str(e.args[0]) == 'you are not authorized for this method'
     print(16, 'OK')
@@ -1526,8 +1538,9 @@ def test_generate_secret_key():
 
 
 def run_test_suite():
+    # test_add_bytes()
     test_add_file()
-    test_add_string()
+    test_add_object()
     test_new_confirmed_user()
     test_authorize()
     test_deactivate()
@@ -1541,4 +1554,7 @@ def run_test_suite():
 
 
 if __name__ == "__main__":
-    run_test_suite()
+    # run_test_suite()
+    # for t in admin.get_transactions(range={'From': 1543701000, 'To': 1543701414}):
+    #     print(t)
+    print(uledger.validate_secret_key('SxPWYj*kK4G0Yc$#'))
