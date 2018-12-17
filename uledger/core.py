@@ -51,7 +51,7 @@ class BlockchainUser:
 
     'can_read': the user can read content from the blockchain
     'can_write': the user can write content to the blockchain
-    'can_add_user': the user can add more users to the blockchain
+    'can_add_user': the user can add new users to the blockchain
     'can_add_permission': the user can grant or revoke permissions
 
     Many of the methods in this class return dictionaries built from
@@ -84,9 +84,6 @@ class BlockchainUser:
     def _add_from_stream(self, stream, filename, tags=None, coerce=False):
         """ Adds content from a stream or file object to the blockchain.
 
-        This method is intended to be used via add_bytes() or add_file(), but
-        it is easy enough to use directly if you'd like.
-
         The acting user must have 'can_write' permissions.
 
         Argmuents:
@@ -108,15 +105,13 @@ class BlockchainUser:
         Returns:
             dict: the new transaction's Transaction Object
         """
-        # Check if the stream begins with '"Error: '. The position in the file
-        # will be reset later if the stream contains less than 50MB of data.
         if stream.read(8) == b'"Error: ':
             raise ValueError('The stream cannot begin with '"Error: '")
 
         # Check if the stream contains more than 50MB of content.
-        # tell() shouldn't normally be needed since seek() returns the current
-        # position in the stream, but SpooledTemporaryFile poorly implements
-        # io.IOBase and has its seek() method incorrectly return None instead.
+        # tell() shouldn't normally be needed since seek() should return the
+        # current position, but sometimes seek() is poorly implemented and
+        # returns None like with  tempfile.SpooledTemporaryFile.
         stream.seek(0, os.SEEK_END)
         if stream.tell() > 50 * 1024 * 1024:
             raise OSError("The stream cannot be larger than 50MB.")
@@ -528,15 +523,11 @@ class BlockchainUser:
     def add_bytes(self, b, filename="", tags=None, coerce=False):
         """ Adds a bytestring to the blockchain.
 
-        If you want to store content as-is, use this method or add_file().
-
         The acting user must have 'can_write' permissions.
 
         Args:
-            b (bytes): a bytestring to add to the blockchain.
-                The bytestring cannot exceed 50MB.
-            filename (str): an optional file name that will be stored as
-                content metadata
+            b (bytes): bytestring to add to the blockchain. Cannot exceed 50MB.
+            filename (str): an optional file name to store as metadata
             tags (any): metadata to record alongside the bytestring
             coerce (bool): if True, forces the metadata (tags) into proper
                 form (see _normalize() for details)
@@ -549,8 +540,6 @@ class BlockchainUser:
 
     def add_file(self, path, tags=None, coerce=False):
         """ Adds a file to the blockchain.
-
-        If you want to store content as-is, use this method or add_bytes().
 
         The file must be 50MB or less or your request will be rejected.
         File names are used for metadata but not for server-side storage,
@@ -574,14 +563,10 @@ class BlockchainUser:
     def add_object(self, obj, mode, tags=None, coerce=False, **kwargs):
         """ Serializes an object and adds it to the blockchain.
 
-        If want to store your content in string form, use this method.
-        Otherwise, if you want to add raw binary content with no data
-        mangling, use add_file() or add_bytes().
-
         If you would like to extend this function's JSON encoding capabilities,
         (for example, if you're using objects that can't naturally be converted
-        to JSON strings), you can subclass json.JSONEncoder and pass it to this
-        function as a keyword argument using 'cls=<MyJSONEncoder>'.
+        to JSON), you can subclass json.JSONEncoder and pass it to this method
+        as a keyword argument using 'cls=<MyJSONEncoder>'.
 
         The acting user must have 'can_write' permissions.
 
@@ -594,9 +579,8 @@ class BlockchainUser:
             tags (any): metadata to record alongside the serialized object
             coerce (bool): if True, forces the metadata (tags) into proper
                 form (see _normalize() for details).
-            kwargs (any): keyword arguments to control JSON serialization
-                behavior. All of the keyword arguments available in
-                json.dumps() are available and will be passed to it directly.
+            kwargs (any): keyword arguments to control JSON serialization.
+                These are just the kwargs available in json.dumps().
 
         Raises:
             ValueError: if mode is not 'json', 'str', or 'repr'
@@ -606,23 +590,56 @@ class BlockchainUser:
             dict: the new transaction's Transaction Object
         """
         if mode == 'str':
-            content_string = str(obj)
+            obj_string = str(obj)
         elif mode == 'repr':
-            content_string = repr(obj)
+            obj_string = repr(obj)
         elif mode == 'json':
-            content_string = json.dumps(obj, **kwargs)
+            obj_string = json.dumps(obj, **kwargs)
         else:
             raise ValueError("'mode' must be 'json', 'str', or 'repr'.")
 
         # Serializations starting with '"Error: ' are disallowed because the
         # API server uses the same pattern to designate actual error messages.
-        if content_string.startswith('"Error: '):
+        if obj_string.startswith('"Error: '):
             raise ValueError(
                 "Serializations cannot begin with '\"Error: '")
 
         fields = {
             "user": self._user(),
-            "content_string": content_string,
+            "content_string": obj_string,
+            "metadata": self._normalize(tags, coerce=coerce)
+        }
+
+        return self._call_api("/store/add", fields)["result"]
+
+    def add_string(self, string, tags=None, coerce=False):
+        """ Adds a string to the blockchain.
+
+        Use this method to store simple string literals. If you are interested
+        in object storage, you can use add_object() or serialize the object
+        yourself and add the serialization to the blockchain with this method.
+
+        The acting user must have 'can_write' permissions.
+
+        Args:
+            string (str): the string to add to the blockchain
+            tags (any): metadata to record alongside the serialized object
+            coerce (bool): if True, forces the metadata (tags) into proper
+                form (see _normalize() for details).
+
+        Raises:
+            ValueError: if the string begins with '"Error: '
+
+        Returns:
+            dict: the new transaction's Transaction Object
+        """
+        if string.startswith('"Error: '):
+            raise ValueError(
+                "Serializations cannot begin with '\"Error: '")
+
+        fields = {
+            "user": self._user(),
+            "content_string": string,
             "metadata": self._normalize(tags, coerce=coerce)
         }
 
@@ -666,13 +683,9 @@ class BlockchainUser:
 
         This method is intended to retrieve transaction metadata, not content.
         If you're interested in retrieving content from the blockchain, use
-        the get_content() method. That being said, this method *can* retrieve
-        raw string content, but it will not retrieve raw file content. Instead,
-        it will provide a URL for use with get_content().
-
-        Transactions are returned from the API server in roughly ascending
-        order in pages of 100, but you can use the ensure_order argument to
-        have this method sort the transactions for you.
+        get_content(). This method *can* retrieve string content added to the
+        blokchain with add_object() or add_string(), but will only return a URL
+        for binary content added with add_bytes() or add_file().
 
         The acting user must have 'can_read' permissions.
 
@@ -683,7 +696,7 @@ class BlockchainUser:
                 populated for each Transaction Object when possible. If string
                 content is encountered, it will be added to the content field.
                 If file content is encountered, the content field will be
-                populated with a URL to download the file from later.
+                populated with a URL that can be used to download the file.
                 A file 'extension' field will also be populated.
             sort (bool): if set to True, transactions will be returned in
                 sorted order. By default, transactions are not guaranteed
@@ -696,14 +709,15 @@ class BlockchainUser:
             transaction_hash (str): a transaction hash to search for on the
                 blockchain. Each transaction on the blockchain has a unique
                 transaction hash, so this query parameter will only ever match
-                a single transaction. Incompatible with other query parameters.
+                a single transaction. transaction_hash is incompatible with
+                other query parameters and must be used alone.
             content_hash (str): a content hash to search for on the blockchain.
             tags_all (any): metadata to search for on the blockchain.
                 In order to match, a transaction must contain every tag
-                specified here. Incompatible with tags_any.
+                specified here. tags_all cannot be used with tags_any.
             tags_any (any): metadata to search for on the blockchain.
                 In order to match, a transaction must contain one or more of
-                the tags specified here. Incompatible with tags_all.
+                the tags specified here. tags_any cannot be used with tags_all.
             last_transactions (int): the number of most recent transactions to
                 request from the blockchain
             range (dict): a time range to search on the blockchain. This must
@@ -744,7 +758,6 @@ class BlockchainUser:
             endpoint = "/store/getTransactions"
 
         # If 'page' exists and is an integer, request the one-and-only page.
-        # If no transactions are present, use an empty list instead.
         if isinstance(kwargs.get("page"), int):
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             transactions = self._call_api(endpoint, fields)["result"] or []

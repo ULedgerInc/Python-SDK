@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""This is a software development kit for the ULedger API.
+""" This is a software development kit for the ULedger API.
 It will take care of API-related boilerplate so you don't have to.
 
 Basic Usage:
