@@ -81,7 +81,7 @@ class BlockchainUser:
     # Internal Methods
     # ----------------
 
-    def _add_from_stream(self, stream, filename, tags=None, coerce=False):
+    def _add_stream(self, stream, filename, tags=None, coerce=False):
         """ Adds content from a stream or file object to the blockchain.
 
         The acting user must have 'can_write' permissions.
@@ -527,7 +527,9 @@ class BlockchainUser:
 
         Args:
             b (bytes): bytestring to add to the blockchain. Cannot exceed 50MB.
-            filename (str): an optional file name to store as metadata
+            filename (str): an optional file name to store as metadata.
+                If you don't set a file name, it will be set to the IPFS hash
+                of the bytestring with a '.txt' extension.
             tags (any): metadata to record alongside the bytestring
             coerce (bool): if True, forces the metadata (tags) into proper
                 form (see _normalize() for details)
@@ -535,8 +537,10 @@ class BlockchainUser:
         Returns:
             dict: the new transaction's Transaction Object.
         """
+        if not filename:
+            filename = ''.join([helpers.ipfs_hash(b), '.txt'])
         with io.BytesIO(b) as stream:
-            return self._add_from_stream(stream, filename, tags, coerce)
+            return self._add_stream(stream, filename, tags, coerce)
 
     def add_file(self, path, tags=None, coerce=False):
         """ Adds a file to the blockchain.
@@ -558,7 +562,7 @@ class BlockchainUser:
         """
         filename = os.path.basename(path)
         with open(path, 'rb') as stream:
-            return self._add_from_stream(stream, filename, tags, coerce)
+            return self._add_stream(stream, filename, tags, coerce)
 
     def add_object(self, obj, mode, tags=None, coerce=False, **kwargs):
         """ Serializes an object and adds it to the blockchain.
