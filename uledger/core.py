@@ -484,7 +484,7 @@ class BlockchainUser:
             BlockchainUser: created from your blockchain's URL and token
                 and the confirmed user's new access key and secret key
         """
-        if not helpers.validate_secret_key(new_secret_key):
+        if new_secret_key and not helpers.validate_secret_key(new_secret_key):
             raise ValueError(
                 'Your secret key must be 8 characters long and contain at'
                 'least one lowercase, uppercase, digit, and punctuation mark.')
