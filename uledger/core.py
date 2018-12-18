@@ -196,7 +196,7 @@ class BlockchainUser:
 
         # Check if the API server responded with an error message.
         if r.content[:8] == b'"Error: ':
-            error_msg = r.content[8:].encode('utf-8').rstrip('\n\"')
+            error_msg = r.content[8:].decode('utf-8').rstrip('\n\"')
             raise APIError(error_msg, fields)
 
         # Stream the response to a unique file in the user's Downloads folder.
@@ -334,8 +334,7 @@ class BlockchainUser:
             target_access_key (str): the user to authorize
             permissions (str): permissions to grant to the user. In the call
                 to authorize(), specify any combination of 'can_read'
-                'can_write', 'can_add_user', or 'can_add_permission' as
-                separate arguments or together as a list of strings.
+                'can_write', 'can_add_user', or 'can_add_permission'.
 
         Returns:
             dict: the user's updated information including their access
