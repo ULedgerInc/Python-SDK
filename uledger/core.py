@@ -821,7 +821,8 @@ class BlockchainUser:
         elif content_string:
             fields["content_string"] = content_string
         elif filename:
-            fields["content_file"] = (filename, open(filename, mode='rb'))
+            with open(filename, mode='rb') as file:
+                fields["content_file"] = (filename, file)
 
         try:
             self._call_api("/store/verify", fields)
