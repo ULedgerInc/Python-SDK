@@ -49,39 +49,45 @@ lumberjack = uledger.BlockchainUser(
 
 class TestAddFile(unittest.TestCase):
     """ Tests the BlockchainUser.add_file() method. """
-    paths = {
-        'hello_world': 'hello_world.txt',
-        'empty': 'empty.txt',
-        'rbf': 'really_big_file.txt'
-    }
-
     def test_normal_file(self):
         tags = ['file']
-        path = self.paths['hello_world']
+        path = 'hello_world'
         with open(path, 'w') as file:
             file.write("hello world!")
         to = lumberjack.add_file(path, tags)
         self.assertIsInstance(to, dict, to)
+        os.remove(path)
 
     def test_empty_file(self):
         tags = ['empty', 'file']
-        path = self.paths['empty']
+        path = 'empty.txt'
         open(path, 'w').close()
         to = lumberjack.add_file(path, tags)
         self.assertIsInstance(to, dict, to)
+        os.remove(path)
 
     def test_really_big_file(self):
         tags = ['>50mb', 'file']
-        path = self.paths['rbf']
+        path = 'really_big_file.txt'
         with open(path, mode='wb') as rbf:
             rbf.write(os.urandom(50 * 2**20 + 1))
         with self.assertRaises(OSError):
             lumberjack.add_file(path, tags=tags)
+        os.remove(path)
 
-    @classmethod
-    def tearDownClass(cls):
-        for path in cls.paths.values():
-            os.remove(path)
+    def test_context_binary_mode(self):
+        path = 'text_mode.txt'
+        with open(path, mode='w+b') as file:
+            file.write(b'some content to record as binary')
+            lumberjack.add_file(file)
+        os.remove(path)
+
+    def test_context_text_mode(self):
+        path = 'binary_context.txt'
+        with open(path, mode='w+') as file:
+            file.write('some content to record as text')
+            lumberjack.add_file(file)
+        os.remove(path)
 
 
 class TestAddString(unittest.TestCase):

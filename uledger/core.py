@@ -70,8 +70,9 @@ class BlockchainUser:
         self.secret_key = secret_key
 
     def __repr__(self):
-        return ("{0}({1}, {2}))".format(
-            self.__class__.__name__, self.url, self.access_key))
+        return ("{0}({1}, {2}, {3}, {4})".format(
+            self.__class__.__name__,
+            self.url, self.token, self.access_key, self.secret_key))
 
     def __str__(self):
         return str(self.__dict__)
@@ -80,26 +81,26 @@ class BlockchainUser:
     # Internal Methods
     # ----------------
 
-    def _add_stream(self, stream, filename, tags=None, coerce=False):
-        """ Adds content from a stream or file object to the blockchain.
+    def _add_stream(self, stream, filename="", tags=None, coerce=False):
+        """ Adds the binary content from an in-memory stream to the blockchain.
 
         The acting user must have 'can_write' permissions.
 
-        Argmuents:
-            stream (io.IOBase): the stream or file object to record to the
-                blockchain. The stream cannot exceed 50MB. The stream object
-                should probably belong to a subclass of io.IOBase, but any
-                file object should work as long as it supports proper seek(),
-                tell(), and read() methods.
-            filename (str): the filename to record as metadata in the new
-                blockchain transaction.
-            tags (any): metadata to record alongside the stream
-            coerce (bool): coerce (bool): if True, forces the metadata (tags)
-                into proper form (see _normalize() for details).
+        Arguments:
+            stream (io.BufferedIOBase, io.RawIOBase): the stream or file object
+                to add to the blockchain. This should usually come from open().
+                Otherwise, it should subclass io.BufferedIOBase or io.RawIOBase.
+                The stream content cannot exceed 50MiB.
+            filename (str): an optional filename to record as metadata in the
+                new blockchain transaction. If you do not specify a filename,
+                this method will use the actual filename if one exists or
+                the IPFS hash of the content as a fallback.
+            tags (any): metadata to record alongside the binary content
+            coerce (bool): force tags into the proper form (see _normalize()
 
         Raises:
             ValueError: if the stream begins with '"Error: '
-            OSError: if the stream contains more than 50MB of content
+            OSError: if the stream contains more than 50MiB of content
 
         Returns:
             dict: the new transaction's Transaction Object
@@ -107,14 +108,21 @@ class BlockchainUser:
         if stream.read(8) == b'"Error: ':
             raise ValueError('The stream cannot begin with '"Error: '")
 
-        # Check if the stream contains more than 50MB of content.
+        # Check if the stream contains more than 50MiB of content.
         # tell() shouldn't normally be needed since seek() should return the
         # current position, but sometimes seek() is poorly implemented and
-        # returns None like with  tempfile.SpooledTemporaryFile.
-        stream.seek(0, os.SEEK_END)
+        # returns None (such as tempfile.SpooledTemporaryFile).
+        stream.seek(0, io.SEEK_END)
         if stream.tell() > 50 * 1024 * 1024:
-            raise OSError("The stream cannot be larger than 50MB.")
-        stream.seek(0, os.SEEK_SET)
+            raise OSError("The stream cannot be larger than 50MiB.")
+        stream.seek(0, io.SEEK_SET)
+
+        if not filename:
+            try:  # file objects will have a name, but io.BytesIO objects won't
+                filename = stream.name
+            except AttributeError:
+                filename = helpers.ipfs_hash(stream.read()) + '.txt'
+                stream.seek(0, io.SEEK_SET)
 
         fields = {
             "user": self._user(),
@@ -242,7 +250,7 @@ class BlockchainUser:
                 str and bytes objects are treated as a single value.
             coerce (bool): if coerce is set to True, the metadata list will be
                 forcibly shortened to 50 tags of no more than 50 characters
-                each. If False, the original data will not be modified.
+                each. Otherwise, the original data will not be modified.
                 If you fail to meet the metadata requirements, the API server
                 will reject your transaction and return an error.
             dumps(bool): if dumps is set to True, then the final list of
@@ -520,43 +528,44 @@ class BlockchainUser:
         The acting user must have 'can_write' permissions.
 
         Args:
-            b (bytes): bytestring to add to the blockchain. Cannot exceed 50MB.
-            filename (str): an optional file name to store as metadata.
-                If you don't set a file name, it will be set to the IPFS hash
-                of the bytestring with a '.txt' extension.
+            b (bytes): bytestring to add to the blockchain. Cannot exceed 50MiB.
+            filename (str): an optional file name for _add_stream().
             tags (any): metadata to record alongside the bytestring
-            coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details)
+            coerce (bool): force tags into the proper form (see _normalize()
 
         Returns:
             dict: the new transaction's Transaction Object.
         """
-        if not filename:
-            filename = helpers.ipfs_hash(b) + '.txt'
-        with io.BytesIO(b) as stream:
-            return self._add_stream(stream, filename, tags, coerce)
+        with io.BytesIO(b) as file:
+            return self._add_stream(file, filename, tags, coerce)
 
-    def add_file(self, path, tags=None, coerce=False):
+    def add_file(self, file, tags=None, coerce=False):
         """ Adds a file to the blockchain.
-
-        The file must be 50MB or less or your request will be rejected.
-        File names are used for metadata but not for server-side storage,
-        so there is no risk of a directory traversal attack.
 
         The acting user must have 'can_write' permissions.
 
         Args:
-            path (str): the absolute path to the file you want to add.
+            file (str, io.IOBase): a file to add to the blockchain. File paths
+                in-memory streams file objects are both supported. The actual
+                file content cannot exceed 50 MiB.
             tags (any): metadata to record alongside the file
-            coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details).
+            coerce (bool): force tags into the proper form (see _normalize()
 
         Returns:
             dict: the new transaction's Transaction Object.
         """
-        filename = os.path.basename(path)
-        with open(path, 'rb') as stream:
-            return self._add_stream(stream, filename, tags, coerce)
+        # If a file path was specified, open the file in binary mode.
+        if isinstance(file, str):
+            file = open(file, 'rb')
+
+        # If a file object was provided in text mode, grab its raw stream.
+        elif isinstance(file, io.TextIOWrapper):
+            file = file.buffer.raw  # Underlying binary stream (undocumented)
+
+        # Add the binary content from the file object to the blockchain.
+        with file:
+            file_name = os.path.basename(file.name)
+            return self._add_stream(file, file_name, tags, coerce)
 
     def add_object(self, obj, mode, tags=None, coerce=False, **kwargs):
         """ Serializes an object and adds it to the blockchain.
@@ -575,8 +584,7 @@ class BlockchainUser:
                 the object's __repr__ method. 'json' will serialize the object
                 as a JSON-formatted string using a JSONEncoder.
             tags (any): metadata to record alongside the serialized object
-            coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details).
+            coerce (bool): force tags into the proper form (see _normalize()
             kwargs (any): keyword arguments to control JSON serialization.
                 These are just the kwargs available in json.dumps().
 
@@ -621,9 +629,8 @@ class BlockchainUser:
 
         Args:
             string (str): the string to add to the blockchain
-            tags (any): metadata to record alongside the serialized object
-            coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details).
+            tags (any): metadata to record alongside the string
+            coerce (bool): force tags into the proper form (see _normalize()
 
         Raises:
             ValueError: if the string begins with '"Error: '
@@ -688,8 +695,7 @@ class BlockchainUser:
         The acting user must have 'can_read' permissions.
 
         Args:
-            coerce (bool): if True, forces the metadata (tags) into proper
-                form (see _normalize() for details).
+            coerce (bool): force tags into the proper form (see _normalize()
             with_content (bool): if set to True, a 'content' field will be
                 populated for each Transaction Object when possible. If string
                 content is encountered, it will be added to the content field.
