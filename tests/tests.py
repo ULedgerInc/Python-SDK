@@ -400,6 +400,21 @@ class TestGenerateSecretKey(unittest.TestCase):
         self.assertTrue(uledger.validate_secret_key(sk))
 
 
+class TestValidateSecretKey(unittest.TestCase):
+    """ Tests the helpers.validate_secret_key() function. """
+    def test_letters(self):
+        self.assertFalse(uledger.validate_secret_key('hi'))
+
+    def test_mix1(self):
+        self.assertFalse(uledger.validate_secret_key('1abcdefg'))
+
+    def test_mix2(self):
+        self.assertFalse(uledger.validate_secret_key('1aBCDEFG'))
+
+    def test_strong(self):
+        self.assertTrue(uledger.validate_secret_key('1aB*****'))
+
+
 class TestNaughtyStrings(unittest.TestCase):
     """ Tests the BlockchainUser.add_string() method with unexpected inputs. """
     def _check_and_assert(self, naughty_string):
