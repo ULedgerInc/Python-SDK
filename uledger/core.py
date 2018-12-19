@@ -322,28 +322,6 @@ class BlockchainUser:
             admin_name=name, repeat_secret_key=self.secret_key)}
         return self._call_api("/store/admin", fields)
 
-    def authorize(self, target_access_key, *permissions):
-        """ Grants permissions to a user.
-
-        Repeatedly granting a permission does nothing. You can grant permissions
-        to yourself. The super admin cannot have their permissions modified.
-
-        The acting user must have 'can_add_permission' permissions.
-
-        Args:
-            target_access_key (str): the user to authorize
-            permissions (str): permissions to grant to the user. In the call
-                to authorize(), specify any combination of 'can_read'
-                'can_write', 'can_add_user', or 'can_add_permission'.
-
-        Returns:
-            dict: the user's updated information including their access
-                key and any permissions they now have access to
-        """
-        fields = {"user": self._user(
-            user_to_auth_access_key=target_access_key, authorize=permissions)}
-        return self._call_api("/store/authorize", fields)
-
     def confirm_user(self, access_key, old_secret_key, new_secret_key=""):
         """ Confirms a new user.
 
@@ -381,25 +359,6 @@ class BlockchainUser:
 
         self._call_api("/store/confirmUser", fields)
         return self.__class__(self.url, self.token, access_key, new_secret_key)
-
-    def deactivate(self, target_access_key):
-        """ Removes all permissions from a user.
-
-        A user must be confirmed before being deactivated. Deactivating a user
-        multiple times does nothing. You can deactivate yourself. The super
-        admin cannot be deactivated.
-
-        The acting user must have 'can_add_permission' permissions.
-
-        Args:
-            target_access_key (str): the user to deactivate
-
-        Returns:
-            dict: {'error': ..., 'access_key': ...}
-        """
-        fields = {"user": self._user(
-            user_to_auth_access_key=target_access_key, deactivate=True)}
-        return self._call_api("/store/authorize", fields)
 
     def get_users(self, name="", access_key=""):
         """ Gets a list of users with access to the blockchain.
@@ -490,21 +449,28 @@ class BlockchainUser:
         access_key, secret_key = self.new_user(name)
         return self.confirm_user(access_key, secret_key, new_secret_key)
 
-    def revoke(self, target_access_key, *permissions):
-        """ Revokes permissions from a user.
+    def set_permissions(self, target_access_key,
+                        authorize=None, revoke=None, deactivate=False):
+        """ Sets permissions for a target user.
 
-        Revoking a permission multiple times does nothing. You can revoke
-        permissions from yourself. The super admin cannot have any of their
-        permissions revoked.
+        Repeatedly modifying a permission does nothing. You can grant and
+        revoke permissions from yourself. The super admin cannot have their
+        permissions modified.
+
+        The deactivate kwarg takes precedence over revoke, which in turn
+        takes precedence over authorize. Permissions set to True using
+        'authorize' will be set to False if they are also specified in 'revoke'.
+        If deactivate is True, then all of the user's permissions will be set
+        to False no matter what.
 
         The acting user must have 'can_add_permission' permissions.
+        The target user must be confirmed.
 
         Args:
-            target_access_key (str): the user to revoke permissions from
-            permissions (str): permissions to revoke from the user. In the call
-                to revoke(), specify any combination of 'can_read', 'can_write',
-                'can_add_user', or 'can_add_permission' as separate arguments
-                or together as a list of strings.
+            target_access_key (str): the user to authorize
+            authorize (list of str): a list of permissions to grant to the user
+            revoke (list of str): a list of permissions to revoke from the user
+            deactivate (bool): sets all of the user's permissions to False.
 
         Returns:
             dict: the user's updated information including their access
@@ -512,8 +478,12 @@ class BlockchainUser:
         """
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
-            revoke=permissions)}
+            authorize=authorize, revoke=revoke, deactivate=deactivate)}
         return self._call_api("/store/authorize", fields)
+
+    def get_permissions(self):
+        """ Retrieves the user's current set of permissions. """
+        return self.get_users(access_key=self.access_key)[0]
 
     # ---------------
     # Data Management
@@ -537,7 +507,7 @@ class BlockchainUser:
             dict: the new transaction's Transaction Object.
         """
         if not filename:
-            filename = ''.join([helpers.ipfs_hash(b), '.txt'])
+            filename = helpers.ipfs_hash(b) + '.txt'
         with io.BytesIO(b) as stream:
             return self._add_stream(stream, filename, tags, coerce)
 

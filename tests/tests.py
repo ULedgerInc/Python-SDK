@@ -240,9 +240,8 @@ class TestNewConfirmedUser(unittest.TestCase):
             admin.new_confirmed_user(self.name2, "weak_password")
 
 
-class TestAuthorization(unittest.TestCase):
-    """ Tests the BlockchainUser.authorize(), .revoke(), and deactivate()
-    methods. """
+class TestSetPermissions(unittest.TestCase):
+    """ Tests the BlockchainUser.set_permissions() method. """
     @classmethod
     def setUpClass(cls):
         cls.ak = lumberjack.access_key
@@ -259,258 +258,145 @@ class TestAuthorization(unittest.TestCase):
             'access_key': cls.ak
         }
 
-        cls.original = admin.authorize(cls.ak)
+        cls.original = admin.set_permissions(cls.ak)
 
     @classmethod
     def current_permissions(cls):
-        return admin.authorize(cls.ak)
+        return admin.set_permissions(lumberjack.access_key)
 
     def restore(self):
-        admin.deactivate(self.ak)
-        return admin.authorize(
+        admin.set_permissions(self.ak, deactivate=True)
+        return admin.set_permissions(
             self.ak,
             *[perm for perm, value in self.original.items()
               if value is True])
 
-    def test_grant_and_revoke_one(self):
-        perms = admin.authorize(self.ak, "can_add_user")
+    def test_authorize_and_revoke_one(self):
+        perms = admin.set_permissions(self.ak, authorize=["can_add_user"])
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
-
-        perms = admin.revoke(self.ak, "can_add_user")
+        perms = admin.set_permissions(self.ak, revoke=["can_add_user"])
         self.assertNotIn('can_add_user', perms, "Permission still present.")
 
         self.restore()
 
-    def test_grant_and_revoke_two(self):
-        perms = admin.authorize(self.ak, "can_add_user", "can_add_permission")
+    def test_authorize_and_revoke_two(self):
+        perms = admin.set_permissions(
+            self.ak, authorize=["can_add_user", "can_add_permission"])
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
         self.assertTrue(perms['can_add_permission'], "'can_add_permission' not set.")
 
-        perms = admin.revoke(self.ak, "can_read", "can_write")
+        perms = admin.set_permissions(
+            self.ak, revoke=["can_read", "can_write"])
         self.assertNotIn('can_read', perms, "'can_read' still set.")
         self.assertNotIn('can_write', perms, "'can_write' still present.")
 
         self.restore()
 
-    def test_grant_none(self):
-        perms1 = self.current_permissions()
-        perms2 = admin.authorize(self.ak)
-        self.assertDictEqual(
-            perms1, perms2, 'Blank authorization changed permissions.')
-
-        self.restore()
-
-    def test_grant_and_revoke_all(self):
-        perms = admin.authorize(self.ak, "can_read", "can_write",
-                                "can_add_user", "can_add_permission")
+    def test_authorize_and_revoke_all(self):
+        perms = admin.set_permissions(
+            self.ak, authorize=["can_read", "can_write", "can_add_user", "can_add_permission"])
         self.assertDictEqual(perms, self.activated)
 
-        perms3 = admin.revoke(self.ak, "can_read", "can_write",
-                              "can_add_user", "can_add_permission")
+        perms3 = admin.set_permissions(
+            self.ak, revoke=["can_read", "can_write", "can_add_user", "can_add_permission"])
         self.assertDictEqual(perms3, self.deactivated)
 
         self.restore()
 
-    def test_grant_fake(self):
+    def test_authorize_fake(self):
         with self.assertRaises(APIError) as e:
-            admin.authorize(self.ak, "fake_permission")
+            admin.set_permissions(self.ak, authorize=["fake_permission"])
             self.assertEqual(e.exception, 'value fake_permission is not proper')
         self.restore()
 
-    def test_grant_redundant(self):
-        perms1 = admin.authorize(self.ak, "can_read")
-        perms2 = admin.authorize(self.ak, "can_read")
+    def test_authorize_redundant(self):
+        perms1 = admin.set_permissions(self.ak, authorize=["can_read"])
+        perms2 = admin.set_permissions(self.ak, authorize=["can_read"])
         self.assertDictEqual(
             perms1, perms2, "Redundant authorization changed permissions")
         self.restore()
 
-    def test_revoke_none(self):
-        perms1 = self.current_permissions()
-        perms2 = admin.revoke(self.ak)
-        self.assertDictEqual(perms1, perms2)
-        self.restore()
-
     def test_revoke_fake(self):
         with self.assertRaises(APIError) as e:
-            admin.revoke(self.ak, "fake_permission")
+            admin.set_permissions(self.ak, revoke=["fake_permission"])
             self.assertEqual(e.exception, 'value fake_permission is not proper')
         self.restore()
 
     def test_revoke_redundant(self):
-        admin.revoke(self.ak, "can_read")
+        admin.set_permissions(self.ak, revoke=["can_read"])
         perms1 = self.current_permissions()
-        perms2 = admin.revoke(self.ak, "can_read")
+        perms2 = admin.set_permissions(self.ak, revoke=["can_read"])
         self.assertDictEqual(perms1, perms2)
         self.restore()
 
     def test_authorize_without_permission(self):
-        admin.revoke(self.ak, "can_add_permission")
+        admin.set_permissions(self.ak, revoke=["can_add_permission"])
         with self.assertRaises(APIError) as e:
-            lumberjack.authorize(self.ak, "can_read")
+            lumberjack.set_permissions(self.ak, authorize=["can_read"])
             self.assertEqual(e.exception, "you are not authorized to add permission")
         self.restore()
 
     def test_authorize_bad_key(self):
         with self.assertRaises(APIError) as e:
-            admin.authorize("some non-existant key", "can-read")
+            lumberjack.set_permissions("bad key", authorize=["can_read"])
             self.assertEqual(e.exception, "user does not exist")
         self.restore()
 
     def test_deactivate(self):
-        perms = admin.deactivate(self.ak)
+        perms = admin.set_permissions(self.ak, deactivate=True)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
 
     def test_deactivate_redundant(self):
-        admin.deactivate(self.ak)
-        perms = admin.deactivate(self.ak)
+        admin.set_permissions(self.ak, deactivate=True)
+        perms = admin.set_permissions(self.ak, deactivate=True)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
 
     def test_deactivate_without_permission(self):
-        admin.revoke(self.ak, "can_add_permission")
+        admin.set_permissions(self.ak, revoke=["can_add_permission"])
         with self.assertRaises(APIError) as e:
-            lumberjack.deactivate(self.ak)
+            lumberjack.set_permissions(self.ak, deactivate=True)
             self.assertEqual(e.exception, "you are not authorized to add permission")
         self.restore()
 
     def test_deactivate_self(self):
-        admin.authorize(self.ak, "can_add_permission")
-        perms = lumberjack.deactivate(self.ak)
+        admin.set_permissions(self.ak, authorize=["can_add_permission"])
+        perms = lumberjack.set_permissions(self.ak, deactivate=True)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
 
+    def test_set_none(self):
+        perms1 = self.current_permissions()
+        perms2 = admin.set_permissions(self.ak)
+        self.assertDictEqual(
+            perms1, perms2, 'Blank set changed permissions.')
 
-class TestGetContent(unittest.TestCase):
-    """ Tests the BlockchainUser.get_content() method. """
+        self.restore()
 
-    def test_normal_string(self):
-        self.assertEqual(
-            lumberjack.get_content("QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ"),
-            b'a normal string')
+    def test_set_and_revoke(self):
+        perms1 = self.current_permissions()
+        perms2 = admin.set_permissions(
+            self.ak, authorize=["can_read"], revoke=["can_read"])
+        self.assertDictEqual(perms1, perms2)
 
-    def test_unicode_string(self):
-        self.assertEqual(
-            lumberjack.get_content("QmPfnrUoqFnk2yrwE3csjK1CpJmEJUqay8YLjypQxzQycB"),
-            b'this string has 50 characters with some extra \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e.')
-
-    def test_error_message_string(self):
-        with self.assertRaises(APIError) as e:
-            lumberjack.get_content("this hash doesn't exist")
-            self.assertEqual(e.exception, 'there is no transaction with given hash')
-
-    def test_object_json(self):
-        obj = {"trick": "question"}
-        serialization = json.dumps(obj)
-        obj_hash = uledger.ipfs_hash(serialization)
-        lumberjack.add_object({"trick": "question"}, 'json')
-        obj_check = json.loads(lumberjack.get_content(obj_hash).decode())
-        self.assertEqual(obj, obj_check)
-
-    def test_object_str(self):
-        obj = [1, 2, 3]
-        serialization = str(obj)
-        obj_hash = uledger.ipfs_hash(serialization)
-        lumberjack.add_object(obj, 'str')
-        obj_check = json.loads(lumberjack.get_content(obj_hash).decode())
-        self.assertEqual(obj, obj_check)
-
-    def test_error_message_obj(self):
-        obj = "Error: fake error 2 electric boogaloo"
-        with self.assertRaises(ValueError):
-            lumberjack.add_object(obj, 'json')
-
-    def test_file(self):
-        content = os.urandom(20)
-        with open('content.txt', 'wb') as file:
-            file.write(content)
-        lumberjack.add_file('content.txt')
-        file_hash = uledger.ipfs_hash(content)
-        self.assertEqual(lumberjack.get_content(file_hash), content)
-        os.remove('content.txt')
+    def test_set_and_revoke_and_deactivate(self):
+        perms1 = self.current_permissions()
+        perms2 = admin.set_permissions(
+            self.ak, authorize=["can_read"], revoke=["can_read"], deactivate=True)
+        self.assertDictEqual(perms1, perms2)
 
 
-class TestGetUsers(unittest.TestCase):
-    """ Tests the BlockchainUser.get_users() method. """
-    def test_get_all_users(self):
-        self.assertGreaterEqual(len(lumberjack.get_users()), 2)
-
-    def test_get_users_by_name(self):
-        self.assertGreaterEqual(len(lumberjack.get_users("lumberjack")), 1)
-
-    def test_get_user_by_key(self):
-        self.assertEqual(
-            len(lumberjack.get_users(access_key=lumberjack.access_key)), 1)
-
-    def test_get_fake_user(self):
-        self.assertEqual(lumberjack.get_users('obviously fake user'), [])
-
-
-class TestVerify(unittest.TestCase):
-    """ Tests the BlockchainUser.verify() method. """
-    def test_verify_normal_string(self):
-        content_string = "a normal string"
-        lumberjack.add_string(content_string)
-        self.assertTrue(lumberjack.verify(content_string=content_string))
-
-    def test_verify_unicode_string(self):
-        content_string = "with 日本語の文字 to test API encoding"
-        lumberjack.add_string(content_string)
-        self.assertTrue(lumberjack.verify(content_string=content_string))
-
-    def test_verify_fail(self):
-        content_string = "this string shall not pass"
-        self.assertFalse(lumberjack.verify(content_string=content_string))
-
-    def test_verify_without_permission(self):
-        admin.revoke(lumberjack.access_key, "can_read")
-        with self.assertRaises(APIError) as e:
-            lumberjack.verify(content_string="a normal string")
-            self.assertEqual(
-                e.exception, 'you are not authorized for this method')
-        admin.authorize(lumberjack.access_key, "can_read")
-
-    def test_verify_hash(self):
-        content_hash = lumberjack.add_string("hello there")['content_hash']
-        self.assertTrue(lumberjack.verify(content_hash=content_hash))
-
-    def test_verify_bad_hash(self):
-        self.assertFalse(lumberjack.verify(content_hash="fail"))
-
-    def test_verify_transaction_hash(self):
-        trx_hash = lumberjack.add_string("hello there")['transaction_hash']
-        self.assertTrue(lumberjack.verify(transaction_hash=trx_hash))
-
-    def test_verify_bad_transaction_hash(self):
-        self.assertFalse(lumberjack.verify(transaction_hash='fail'))
-
-    def test_verify_file(self):
-        with open('test.txt', 'w') as file:
-            file.write('hi there')
-            lumberjack.add_file('test.txt')
-        self.assertTrue(lumberjack.verify(filename='test.txt'))
-        os.remove('test.txt')
-
-    def test_verify_bad_file(self):
-        with open('test.txt', 'wb') as file:
-            file.write(os.urandom(5))
-        self.assertFalse(lumberjack.verify(filename='test.txt'))
-        os.remove('test.txt')
-
-
-class TestValidateSecretKey(unittest.TestCase):
-    """ Tests the helpers.validate_secret_key() function. """
-    def test_letters(self):
-        self.assertFalse(uledger.validate_secret_key('hi'))
-
-    def test_mix1(self):
-        self.assertFalse(uledger.validate_secret_key('1abcdefg'))
-
-    def test_mix2(self):
-        self.assertFalse(uledger.validate_secret_key('1aBCDEFG'))
-
-    def test_strong(self):
-        self.assertTrue(uledger.validate_secret_key('1aB*****'))
+class TestGetPermissions(unittest.TestCase):
+    """ Tests the BlockchainUser.get_permissions() method. """
+    def test_get_permissions(self):
+        perms = admin.set_permissions(
+            lumberjack.access_key,
+            authorize=["can_read", "can_write"],
+            revoke=["can_add_user", "can_add_permission"])
+        self.assertDictEqual(
+            perms, {'error': 'false', 'access_key': lumberjack.access_key,
+                    'can_read': True, 'can_write': True})
 
 
 class TestGenerateSecretKey(unittest.TestCase):
@@ -537,7 +423,7 @@ class TestNaughtyStrings(unittest.TestCase):
             '{"error": "fake error text"}',
             '["more fake text"]',
             '["even", "more", "fake", "text"]',
-            '("some", "tuple")',  # TODO
+            '("some", "tuple")',
             '{"key": "value"}',
         ]
         pool = ThreadPool(os.cpu_count())
