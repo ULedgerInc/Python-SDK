@@ -240,8 +240,9 @@ class TestNewConfirmedUser(unittest.TestCase):
             admin.new_confirmed_user(self.name2, "weak_password")
 
 
-class TestSetPermissions(unittest.TestCase):
-    """ Tests the BlockchainUser.set_permissions() method. """
+class TestPermissions(unittest.TestCase):
+    """ Tests the BlockchainUser.set_permissions(), .get_permissions() and
+     .deactivate() methods. """
     @classmethod
     def setUpClass(cls):
         cls.ak = lumberjack.access_key
@@ -265,28 +266,28 @@ class TestSetPermissions(unittest.TestCase):
         return admin.set_permissions(lumberjack.access_key)
 
     def restore(self):
-        admin.set_permissions(self.ak, deactivate=True)
+        admin.deactivate(self.ak)
         return admin.set_permissions(
             self.ak,
             *[perm for perm, value in self.original.items()
               if value is True])
 
     def test_authorize_and_revoke_one(self):
-        perms = admin.set_permissions(self.ak, authorize=["can_add_user"])
+        perms = admin.set_permissions(self.ak, authorize="can_add_user")
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
-        perms = admin.set_permissions(self.ak, revoke=["can_add_user"])
+        perms = admin.set_permissions(self.ak, revoke="can_add_user")
         self.assertNotIn('can_add_user', perms, "Permission still present.")
 
         self.restore()
 
     def test_authorize_and_revoke_two(self):
         perms = admin.set_permissions(
-            self.ak, authorize=["can_add_user", "can_add_permission"])
+            self.ak, authorize=("can_add_user", "can_add_permission"))
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
         self.assertTrue(perms['can_add_permission'], "'can_add_permission' not set.")
 
         perms = admin.set_permissions(
-            self.ak, revoke=["can_read", "can_write"])
+            self.ak, revoke=("can_read", "can_write"))
         self.assertNotIn('can_read', perms, "'can_read' still set.")
         self.assertNotIn('can_write', perms, "'can_write' still present.")
 
@@ -294,75 +295,75 @@ class TestSetPermissions(unittest.TestCase):
 
     def test_authorize_and_revoke_all(self):
         perms = admin.set_permissions(
-            self.ak, authorize=["can_read", "can_write", "can_add_user", "can_add_permission"])
+            self.ak, authorize=("can_read", "can_write", "can_add_user", "can_add_permission"))
         self.assertDictEqual(perms, self.activated)
 
         perms3 = admin.set_permissions(
-            self.ak, revoke=["can_read", "can_write", "can_add_user", "can_add_permission"])
+            self.ak, revoke=("can_read", "can_write", "can_add_user", "can_add_permission"))
         self.assertDictEqual(perms3, self.deactivated)
 
         self.restore()
 
     def test_authorize_fake(self):
         with self.assertRaises(APIError) as e:
-            admin.set_permissions(self.ak, authorize=["fake_permission"])
+            admin.set_permissions(self.ak, authorize="fake_permission")
             self.assertEqual(e.exception, 'value fake_permission is not proper')
         self.restore()
 
     def test_authorize_redundant(self):
-        perms1 = admin.set_permissions(self.ak, authorize=["can_read"])
-        perms2 = admin.set_permissions(self.ak, authorize=["can_read"])
+        perms1 = admin.set_permissions(self.ak, authorize="can_read")
+        perms2 = admin.set_permissions(self.ak, authorize="can_read")
         self.assertDictEqual(
             perms1, perms2, "Redundant authorization changed permissions")
         self.restore()
 
     def test_revoke_fake(self):
         with self.assertRaises(APIError) as e:
-            admin.set_permissions(self.ak, revoke=["fake_permission"])
+            admin.set_permissions(self.ak, revoke="fake_permission")
             self.assertEqual(e.exception, 'value fake_permission is not proper')
         self.restore()
 
     def test_revoke_redundant(self):
-        admin.set_permissions(self.ak, revoke=["can_read"])
+        admin.set_permissions(self.ak, revoke="can_read")
         perms1 = self.current_permissions()
-        perms2 = admin.set_permissions(self.ak, revoke=["can_read"])
+        perms2 = admin.set_permissions(self.ak, revoke="can_read")
         self.assertDictEqual(perms1, perms2)
         self.restore()
 
     def test_authorize_without_permission(self):
-        admin.set_permissions(self.ak, revoke=["can_add_permission"])
+        admin.set_permissions(self.ak, revoke="can_add_permission")
         with self.assertRaises(APIError) as e:
-            lumberjack.set_permissions(self.ak, authorize=["can_read"])
+            lumberjack.set_permissions(self.ak, authorize="can_read")
             self.assertEqual(e.exception, "you are not authorized to add permission")
         self.restore()
 
     def test_authorize_bad_key(self):
         with self.assertRaises(APIError) as e:
-            lumberjack.set_permissions("bad key", authorize=["can_read"])
+            lumberjack.set_permissions("bad key", authorize="can_read")
             self.assertEqual(e.exception, "user does not exist")
         self.restore()
 
     def test_deactivate(self):
-        perms = admin.set_permissions(self.ak, deactivate=True)
+        perms = admin.deactivate(self.ak)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
 
     def test_deactivate_redundant(self):
-        admin.set_permissions(self.ak, deactivate=True)
-        perms = admin.set_permissions(self.ak, deactivate=True)
+        admin.deactivate(self.ak)
+        perms = admin.deactivate(self.ak)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
 
     def test_deactivate_without_permission(self):
-        admin.set_permissions(self.ak, revoke=["can_add_permission"])
+        admin.set_permissions(self.ak, revoke="can_add_permission")
         with self.assertRaises(APIError) as e:
-            lumberjack.set_permissions(self.ak, deactivate=True)
+            lumberjack.deactivate(self.ak)
             self.assertEqual(e.exception, "you are not authorized to add permission")
         self.restore()
 
     def test_deactivate_self(self):
-        admin.set_permissions(self.ak, authorize=["can_add_permission"])
-        perms = lumberjack.set_permissions(self.ak, deactivate=True)
+        admin.set_permissions(self.ak, authorize="can_add_permission")
+        perms = lumberjack.deactivate(self.ak)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
 
@@ -376,27 +377,20 @@ class TestSetPermissions(unittest.TestCase):
 
     def test_set_and_revoke(self):
         perms1 = self.current_permissions()
+        del perms1['can_read']
         perms2 = admin.set_permissions(
-            self.ak, authorize=["can_read"], revoke=["can_read"])
+            self.ak, authorize="can_read", revoke="can_read")
         self.assertDictEqual(perms1, perms2)
 
-    def test_set_and_revoke_and_deactivate(self):
-        perms1 = self.current_permissions()
-        perms2 = admin.set_permissions(
-            self.ak, authorize=["can_read"], revoke=["can_read"], deactivate=True)
-        self.assertDictEqual(perms1, perms2)
-
-
-class TestGetPermissions(unittest.TestCase):
-    """ Tests the BlockchainUser.get_permissions() method. """
     def test_get_permissions(self):
         perms = admin.set_permissions(
-            lumberjack.access_key,
+            self.ak,
             authorize=["can_read", "can_write"],
             revoke=["can_add_user", "can_add_permission"])
         self.assertDictEqual(
-            perms, {'error': 'false', 'access_key': lumberjack.access_key,
+            perms, {'error': 'false', 'access_key': self.ak,
                     'can_read': True, 'can_write': True})
+        self.restore()
 
 
 class TestGenerateSecretKey(unittest.TestCase):

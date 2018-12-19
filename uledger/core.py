@@ -449,41 +449,67 @@ class BlockchainUser:
         access_key, secret_key = self.new_user(name)
         return self.confirm_user(access_key, secret_key, new_secret_key)
 
-    def set_permissions(self, target_access_key,
-                        authorize=None, revoke=None, deactivate=False):
+    def set_permissions(self, target_access_key, authorize=None, revoke=None):
         """ Sets permissions for a target user.
+
+        Revocation takes precedence over authorization. Permissions specified
+        in both authorize and revoke will ultimately be set to False.
 
         Repeatedly modifying a permission does nothing. You can grant and
         revoke permissions from yourself. The super admin cannot have their
         permissions modified.
-
-        The deactivate kwarg takes precedence over revoke, which in turn
-        takes precedence over authorize. Permissions set to True using
-        'authorize' will be set to False if they are also specified in 'revoke'.
-        If deactivate is True, then all of the user's permissions will be set
-        to False no matter what.
 
         The acting user must have 'can_add_permission' permissions.
         The target user must be confirmed.
 
         Args:
             target_access_key (str): the user to authorize
-            authorize (list of str): a list of permissions to grant to the user
-            revoke (list of str): a list of permissions to revoke from the user
-            deactivate (bool): sets all of the user's permissions to False.
+            authorize (str, list, tuple): a list, tuple, or space-separated
+                string of permissions to grant to the user
+            revoke (str, list, tuple): a list, tuple, or space-separates string
+                of permissions to revoke from the user
 
         Returns:
             dict: the user's updated information including their access
                 key and any permissions they still have access to
         """
+        # Wrap permission strings in a list. Now single permissions can be
+        # provided as strings rather than inside of a list or tuple.
+        if isinstance(authorize, str):
+            authorize = [authorize]
+        if isinstance(revoke, str):
+            revoke = [revoke]
+
+        # JSON is especially effective here because lists and tuples are both
+        # encoded as arrays, meaning this method can implicitly accept either.
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
-            authorize=authorize, revoke=revoke, deactivate=deactivate)}
+            authorize=authorize, revoke=revoke)}
+
         return self._call_api("/store/authorize", fields)
 
-    def get_permissions(self):
-        """ Retrieves the user's current set of permissions. """
-        return self.get_users(access_key=self.access_key)[0]
+    def get_permissions(self, target_access_key):
+        """ Returns a user's current set of permissions.
+
+        Args:
+            target_access_key (str): the user to retrieve permissions from
+        """
+        return self.get_users(access_key=target_access_key)[0]
+
+    def deactivate(self, target_access_key):
+        """ Removes all permissions from a user.
+
+        This method has the same behavior and conditions as set_permissions().
+
+        Args:
+            target_access_key (str): the user to deactivate
+
+        Returns:
+            {"access_key": target_access_key, "error": False}
+        """
+        fields = {"user": self._user(
+            user_to_auth_access_key=target_access_key, deactivate=True)}
+        return self._call_api("/store/authorize", fields)
 
     # ---------------
     # Data Management
