@@ -798,8 +798,8 @@ class BlockchainUser:
                content_string="", filename=""):
         """ Checks whether a hash, string, or file appears on the blockchain.
 
-        Only one parameter will be used, prioritized from left to right:
-            transaction_hash > content_hash > content_string > filename.
+        Only one parameter will be used, prioritized from left (high) to right:
+            filename > content_string > content_hash > transaction_hash
 
         The acting user must have 'can_read' permissions.
 
@@ -815,15 +815,18 @@ class BlockchainUser:
             False: if the content was not recorded on the blockchain
         """
         fields = {"user": self._user()}
+
         if transaction_hash:
             fields["metadata"] = json.dumps({"transaction_hash": transaction_hash})
         elif content_hash:
             fields["metadata"] = json.dumps({"content_hash": content_hash})
         elif content_string:
-            fields["content_string"] = content_string
+            string_hash = helpers.ipfs_hash(content_string)
+            fields["metadata"] = json.dumps({"content_hash": string_hash})
         elif filename:
             with open(filename, mode='rb') as file:
-                fields["content_file"] = (filename, file)
+                file_hash = helpers.ipfs_hash(file.read())
+            fields["metadata"] = json.dumps({"content_hash": file_hash})
 
         try:
             self._call_api("/store/verify", fields)
@@ -832,4 +835,5 @@ class BlockchainUser:
                 return False
             else:
                 raise
+
         return True

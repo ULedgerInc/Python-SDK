@@ -399,6 +399,58 @@ class TestPermissions(unittest.TestCase):
         self.restore()
 
 
+class TestVerify(unittest.TestCase):
+    """ Tests the BlockchainUser.verify() method. """
+    def test_verify_normal_string(self):
+        content_string = "a normal string"
+        lumberjack.add_string(content_string)
+        self.assertTrue(lumberjack.verify(content_string=content_string))
+
+    def test_verify_unicode_string(self):
+        content_string = "with 日本語の文字 to test API encoding"
+        lumberjack.add_string(content_string)
+        self.assertTrue(lumberjack.verify(content_string=content_string))
+
+    def test_verify_fail(self):
+        content_string = "this string shall not pass"
+        self.assertFalse(lumberjack.verify(content_string=content_string))
+
+    def test_verify_without_permission(self):
+        admin.set_permissions(lumberjack.access_key, revoke="can_read")
+        with self.assertRaises(APIError) as e:
+            lumberjack.verify(content_string="a normal string")
+            self.assertEqual(
+                e.exception, 'you are not authorized for this method')
+        admin.set_permissions(lumberjack.access_key, authorize="can_read")
+
+    def test_verify_hash(self):
+        content_hash = lumberjack.add_string("hello there")['content_hash']
+        self.assertTrue(lumberjack.verify(content_hash=content_hash))
+
+    def test_verify_bad_hash(self):
+        self.assertFalse(lumberjack.verify(content_hash="fail"))
+
+    def test_verify_transaction_hash(self):
+        trx_hash = lumberjack.add_string("hello there")['transaction_hash']
+        self.assertTrue(lumberjack.verify(transaction_hash=trx_hash))
+
+    def test_verify_bad_transaction_hash(self):
+        self.assertFalse(lumberjack.verify(transaction_hash='fail'))
+
+    def test_verify_file(self):
+        with open('test.txt', 'w+') as file:
+            file.write('hi there')
+            lumberjack.add_file('test.txt')
+        self.assertTrue(lumberjack.verify(filename='test.txt'))
+        os.remove('test.txt')
+
+    def test_verify_bad_file(self):
+        with open('test.txt', 'w+b') as file:
+            file.write(os.urandom(5))
+        self.assertFalse(lumberjack.verify(filename='test.txt'))
+        os.remove('test.txt')
+
+
 class TestGenerateSecretKey(unittest.TestCase):
     """ Tests the helpers.generate_secret_key() function. """
     def test_generate_secret_key(self):
