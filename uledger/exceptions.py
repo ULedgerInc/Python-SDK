@@ -17,7 +17,6 @@
 
 class ULError(Exception):
     """ The base class for exceptions in this module. """
-    pass
 
 
 class APIError(ULError):
@@ -29,6 +28,6 @@ class APIError(ULError):
     request fields as an additional attribute. This way the fields are
     available for debugging but stay hidden by default.
     """
-    def __init__(self, message, fields, *args, **kwargs):
-        super().__init__(message, *args, **kwargs)
+    def __init__(self, message, fields):
+        super().__init__(message)
         self.fields = fields

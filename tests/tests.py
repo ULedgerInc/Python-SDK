@@ -265,25 +265,21 @@ class TestPermissions(unittest.TestCase):
             'access_key': cls.ak
         }
 
-        cls.original = admin.set_permissions(cls.ak)
-
     @classmethod
     def current_permissions(cls):
         return admin.set_permissions(lumberjack.access_key)
 
     def restore(self):
-        admin.deactivate(self.ak)
         return admin.set_permissions(
             self.ak,
-            *[perm for perm, value in self.original.items()
-              if value is True])
+            authorize=['can_read', 'can_write'],
+            revoke=['can_add_permission', 'can_add_user'])
 
     def test_authorize_and_revoke_one(self):
         perms = admin.set_permissions(self.ak, authorize="can_add_user")
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
         perms = admin.set_permissions(self.ak, revoke="can_add_user")
         self.assertNotIn('can_add_user', perms, "Permission still present.")
-
         self.restore()
 
     def test_authorize_and_revoke_two(self):
@@ -378,7 +374,6 @@ class TestPermissions(unittest.TestCase):
         perms2 = admin.set_permissions(self.ak)
         self.assertDictEqual(
             perms1, perms2, 'Blank set changed permissions.')
-
         self.restore()
 
     def test_set_and_revoke(self):
@@ -387,6 +382,7 @@ class TestPermissions(unittest.TestCase):
         perms2 = admin.set_permissions(
             self.ak, authorize="can_read", revoke="can_read")
         self.assertDictEqual(perms1, perms2)
+        self.restore()
 
     def test_get_permissions(self):
         perms = admin.set_permissions(
@@ -473,6 +469,7 @@ class TestValidateSecretKey(unittest.TestCase):
         self.assertTrue(uledger.validate_secret_key('1aB*****'))
 
 
+# This test is paranoid. Disable it if you want to go fast.
 class TestNaughtyStrings(unittest.TestCase):
     """ Tests the BlockchainUser.add_string() method with unexpected inputs. """
     def _check_and_assert(self, naughty_string):
