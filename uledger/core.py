@@ -764,7 +764,13 @@ class BlockchainUser:
         # If 'page' exists and is an integer, request the one-and-only page.
         if isinstance(kwargs.get("page"), int):
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
-            transactions = self._call_api(endpoint, fields)["result"] or []
+            try:
+                transactions = self._call_api(endpoint, fields)["result"] or []
+            except APIError as e:
+                if str(e) == "No transactions for specified time range.":
+                    transactions = []
+                else:
+                    raise
 
         # Otherwise get all of the pages via pagination.
         else:
@@ -775,7 +781,7 @@ class BlockchainUser:
                 try:
                     result = self._call_api(endpoint, fields)["result"]
                 except APIError as e:
-                    if str(e) == "No transactions for the specified time range.":
+                    if str(e) == "No transactions for specified time range.":
                         break  # We've gone too far
                     else:
                         raise  # Elevate a legitimate error
