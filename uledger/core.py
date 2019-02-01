@@ -568,57 +568,7 @@ class BlockchainUser:
             file_name = os.path.basename(file.name)
             return self._add_stream(file, file_name, tags, coerce)
 
-    def add_object(self, obj, mode, tags=None, coerce=False, **kwargs):
-        """ Serializes an object and adds it to the blockchain.
-
-        If you would like to extend this function's JSON encoding capabilities,
-        (for example, if you're using objects that can't naturally be converted
-        to JSON), you can subclass json.JSONEncoder and pass it to this method
-        as a keyword argument using 'cls=<MyJSONEncoder>'.
-
-        The acting user must have 'can_write' permissions.
-
-        Args:
-            obj (any): the object to record to the blockchain.
-            mode (str): controls how the object will be serialized. 'str' will
-                use the object's __str__() method. 'repr' will use the object's
-                __repr__() method. 'json' will use a JSON notation.
-            tags (any): metadata to record alongside the serialized object
-            coerce (bool): force tags into the proper form (see _normalize()
-            kwargs (any): keyword arguments to control JSON serialization.
-                These are the same kwargs available in json.dumps().
-
-        Raises:
-            ValueError: if mode is not 'json', 'str', or 'repr'
-                or if the object's serialization begins with '"Error: '
-
-        Returns:
-            dict: the new Transaction Object
-        """
-        if mode == 'str':
-            obj_string = str(obj)
-        elif mode == 'repr':
-            obj_string = repr(obj)
-        elif mode == 'json':
-            obj_string = json.dumps(obj, **kwargs)
-        else:
-            raise ValueError("'mode' must be 'json', 'str', or 'repr'.")
-
-        # Serializations starting with '"Error: ' are disallowed because the
-        # API server uses the same pattern in its error messages.
-        if obj_string.startswith('"Error: '):
-            raise ValueError(
-                "Serializations cannot begin with '\"Error: '")
-
-        fields = {
-            "user": self._user(),
-            "content_string": obj_string,
-            "metadata": self._normalize(tags, coerce=coerce)
-        }
-
-        return self._call_api("/store/add", fields)["result"]
-
-    def add_string(self, string, tags=None, coerce=False):
+    def add(self, string, tags=None, coerce=False):
         """ Adds a string to the blockchain.
 
         Use this method to store simple string literals. If you are interested
