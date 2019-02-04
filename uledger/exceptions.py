@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-""" This module contains the exceptions used by the ULedger SDK. """
+""" This module contains exceptions used by the ULedger SDK. """
 
 
 class ULError(Exception):

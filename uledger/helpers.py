@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-""" This module contains helper functions for the ULedger SDK. """
+""" This module contains helper functions used by the ULedger SDK. """
 
 from collections import abc
 import random
@@ -62,8 +62,8 @@ def ipfs_hash(content):
 
 
 def validate_secret_key(password):
-    """ Validates a password / key. The ULedger API requires secret keys that
-    are at least 8 characters long with at least one lowercase, uppercase,
+    """ Validates a password / secret key. The ULedger API requires secret keys
+    that are at least 8 characters long with at least one lowercase, uppercase,
     number, and special character.
     """
     if not (len(password) >= 8 and
