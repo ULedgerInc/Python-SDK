@@ -14,21 +14,137 @@
 
 """ This is a software development kit for the ULedger API.
 It will take care of API-related boilerplate so you don't have to.
+For more information, see the API documentation.
 
-Basic Usage:
-    1. Create a new BlockchainUser object using the url and token for a
-       ULedger blockchain and an access key and secret key belonging to one
-       of that blockchain's users.
+The ULedger API specifies two discrete groups of operations: data manipulation
+and user manipulation. Through data manipulation operations, you can read and
+write transactions to and from the blockchain, verify transactions, query
+transactions, and request transaction content.
 
-    2. Use the BlockchainUser object to make requests to the API server.
-       In general, you can read data, write data, and manage users.
+For extra management and security, the ULedger API also supports a set of user
+manipulation operations through permission-based access control. In order to
+make requests to the ULedger API, you must provide a valid set of user
+credentials (an access key and a secret key, or username and password)
+Additionally, the user must have the appropriate permissions for their chosen
+operation. A user can have any combination of 'can_read', 'can_write',
+'can_add_user', and 'can_add_permission' permissions.
 
-Once you put data on a ULedger blockchain, you cannot delete or modify it.
-Check that your data is clean and proper BEFORE you record it to the blockchain.
+'can_read': the user can read content from the blockchain
+'can_write': the user can write content to the blockchain
+'can_add_user': the user can add new users to the blockchain
+'can_add_permission': the user can grant or revoke permissions
+
+A blockchain is always initialized with a single super admin. The super admin
+will preside over a blockchain and the rest of its users. The super admin has
+permanent access to all four permissions and cannot be deleted. To begin using
+your blockchain, you will first need to set the super admin's access key and
+secret key.
+
+By design, ULedger API does NOT support password recovery. If you lose your
+secret key, you cannot get it back or reset it. It is imperative that you keep
+your secret keys safe and secure, especially for the super admin.
+
+Once you put data on a ULedger blockchain, you cannot modify or delete it.
+Make sure to double-check your data BEFORE you record it to the blockchain.
 
 The ULedger protocol uses SHA2-256 multihashes for compatibility with IPFS:
     [1] https://multiformats.io/multihash/
     [2] https://github.com/ipfs/ipfs
+
+Basic Data Manipulation:
+    >>> import uledger
+    >>> admin = uledger.BlockchainUser(,
+    >>>     'blockchain_url', 'api_token', 'access_key', 'secret_key')
+    >>> basic_add = admin.add("some content")
+    >>> print(basic_add)
+    {
+        'timestmap': 1549320863,
+        'content_hash': 'QmR6vwie4jZiLeUiMZwJjTRMzS55ZMbMrXUCXcwRb3kTt9',
+        'block_height': 1241472,
+        'transaction_hash': 'QmagmMC4T2zAbVYHX8FzdircTUdtZuYgTQWdqMs6NaHrAp'
+        'content_size': 12,
+        'merkle_root': 'QmagmMC4T2zAbVYHX8FzdircTUdtZuYgTQWdqMs6NaHrAp',
+        'merkle_proof': {
+            'hashes': [
+                ...,
+        ]}
+        'author': 'admin'
+    }
+    >>> admin.verify(basic_add['transaction_hash'])
+    True
+    >>> admin.get_content(basic_add['content_hash'])
+    b"some content"
+
+Basic Querying:
+    >>> trx = admin.get_transactions(transaction_hash=basic_add['transaction_hash'])
+    >>> print(trx)
+    [{
+        'timestamp': 1549322163,
+        'content_hash': 'QmdLMNBvckm4FhQhsh2sdo1gcAQfCbBFBa9f9mqBdJZDWE',
+        'block_height': 1241480,
+        'transaction_hash': 'QmeWG4DEGyFKzZHTPoA8dCayfVTEyjN6SDhX1qXmcHEKiU',
+        'content_size': 689442,
+        'merkle_root': 'QmeWG4DEGyFKzZHTPoA8dCayfVTEyjN6SDhX1qXmcHEKiU',
+        'merkle_proof': {
+            'hashes': [
+                ...
+        ]},
+        'tags': [
+            ...
+        ],
+        'author': 'admin',
+        'extension': '.png'
+    }]
+    >>> admin.get_transactions(content_hash=basic_add['content_hash']) == trx
+    True
+    >>> admin.get_transactions(last_transactions=1) == trx
+    True
+    >>> import time
+    >>> admin.get_transactions(range={"From": 0, "To":time.time()}) == trx
+    True
+
+Basic User Manipulation:
+    >>> jackson = admin.new_confirmed_user('Jackson Parsons')
+    >>> print(jackson)
+    {
+        'url': <your blockchain url>,
+        'token': <your blockchain's api token>,
+        'access_key': <jackson's access key>,
+        'secret_key': <jackson's secret key>
+    }
+    >>> admin.set_permissions(jackson.access_key, ("can read", "can_write"))
+    {
+        'error': 'false',
+        'access_key': <jackson's access key>,
+        'can_read': True,
+        'can_write': True
+    }
+    >>> admin.get_permissions(jackson.access_key)
+    {
+        'can_add_user': True,
+        'can_add_permission': False,
+        'can_read': True,
+        'can_write': True
+    }
+    >>> admin.get_users(name='Jackson Parsons')
+    [
+        {
+            'id': 123,
+            'access_key': <jackson's access key>,
+            'confirmed': True,
+            'can_add_user': False,
+            'can_add_permission': False,
+            'can_read': True,
+            'can_write': True,
+            'name': 'Jackson Parsons'
+        }
+        ...
+    ]
+    >>> admin.deactivate(jackson.access_key)
+    {
+        'error': 'false',
+        'access_key': <jackson's access key>
+    }
 """
 
 from .core import BlockchainUser
