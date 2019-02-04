@@ -25,6 +25,10 @@ Basic Usage:
 
 Once you put data on a ULedger blockchain, you cannot delete or modify it.
 Check that your data is clean and proper BEFORE you record it to the blockchain.
+
+The ULedger protocol uses SHA2-256 multihashes for compatibility with IPFS:
+    [1] https://multiformats.io/multihash/
+    [2] https://github.com/ipfs/ipfs
 """
 
 from .core import BlockchainUser
