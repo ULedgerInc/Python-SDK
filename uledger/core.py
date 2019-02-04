@@ -81,8 +81,8 @@ class BlockchainUser:
     # Internal Methods
     # ----------------
 
-    def _add_stream(self, stream, filename="", tags=None, coerce=False):
-        """ Adds the binary content from an in-memory stream to the blockchain.
+    def _add_stream(self, stream, filename=None, tags=None, coerce=False):
+        """ Adds binary content from an in-memory stream to the blockchain.
 
         The acting user must have 'can_write' permissions.
 
@@ -96,7 +96,7 @@ class BlockchainUser:
                 this method will use the actual file name if one exists or
                 the IPFS hash of the content as a fallback.
             tags (any): metadata to record alongside the binary content
-            coerce (bool): force tags into the proper form (see _normalize()
+            coerce (bool): force tags into the proper form (see _normalize())
 
         Raises:
             ValueError: if the stream begins with '"Error: '
@@ -105,6 +105,11 @@ class BlockchainUser:
         Returns:
             dict: the new Transaction Object
         """
+        # If the API server encounters an error, it will respond with an error
+        # message starting with '"Error: '. However, if one were to add their
+        # own "fake" error message (i.e. a string starting with '"Error: ')
+        # to the blockchain, then there would be no way to tell the two apart.
+        # To avoid this, bytestrings starting with '"Error: ' are disallowed.
         if stream.read(8) == b'"Error: ':
             raise ValueError('The stream cannot begin with '"Error: '")
 
@@ -118,7 +123,7 @@ class BlockchainUser:
         stream.seek(0, io.SEEK_SET)
 
         if not filename:
-            try:  # file objects will have a name, but io.BytesIO objects won't
+            try:  # File objects will have a name, but io.BytesIO objects won't
                 filename = stream.name
             except AttributeError:
                 filename = helpers.ipfs_hash(stream.read()) + '.txt'
@@ -523,22 +528,41 @@ class BlockchainUser:
     # Data Management
     # ---------------
 
-    def add_bytes(self, b, filename="", tags=None, coerce=False):
-        """ Adds a bytestring to the blockchain.
+    def add(self, data, tags=None, coerce=False):
+        """ Adds string or bytes data to the blockchain.
 
         The acting user must have 'can_write' permissions.
 
         Args:
-            b (bytes): bytestring to add to the blockchain. Cannot exceed 50MiB.
-            filename (str): an optional file name for _add_stream().
-            tags (any): metadata to record alongside the bytestring
-            coerce (bool): force tags into the proper form (see _normalize()
+            data (string, bytestring): data to add to the blockchain
+            tags (any): metadata to record alongside the data
+            coerce (bool): force tags into the proper form (see _normalize())
+
+        Raises:
+            ValueError: if the data is a string that begins with '"Error: '
 
         Returns:
-            dict: the new Transaction Object.
+            dict: the new Transaction Object
         """
-        with io.BytesIO(b) as file:
-            return self._add_stream(file, filename, tags, coerce)
+        if isinstance(data, bytes):
+            with io.BytesIO(data) as file:
+                return self._add_stream(file, tags, coerce)
+
+        # If the API server encounters an error, it will respond with an error
+        # message starting with '"Error: '. However, if one were to add their
+        # own "fake" error message (i.e. a string starting with '"Error: ')
+        # to the blockchain, then there would be no way to tell the two apart.
+        # To avoid this, strings starting with '"Error: ' are disallowed.
+        if isinstance(data, str) and data.startswith('"Error: '):
+            raise ValueError("String data cannot begin with '\"Error: '")
+
+        fields = {
+            "user": self._user(),
+            "content_string": data,
+            "metadata": self._normalize(tags, coerce=coerce)
+        }
+
+        return self._call_api("/store/add", fields)["result"]
 
     def add_file(self, file, tags=None, coerce=False):
         """ Adds a file to the blockchain.
@@ -546,11 +570,11 @@ class BlockchainUser:
         The acting user must have 'can_write' permissions.
 
         Args:
-            file (str, io.IOBase): a file to add to the blockchain. File paths
-                and in-memory file objects are both supported. The raw file
-                content cannot exceed 50 MiB.
+            file (str, io.IOBase): a file to add to the blockchain.
+                File paths and in-memory file objects are both supported.
+                The raw file content cannot exceed 50 MiB.
             tags (any): metadata to record alongside the file
-            coerce (bool): force tags into the proper form (see _normalize()
+            coerce (bool): force tags into the proper form (see _normalize())
 
         Returns:
             dict: the new Transaction Object.
@@ -567,38 +591,6 @@ class BlockchainUser:
         with file:
             file_name = os.path.basename(file.name)
             return self._add_stream(file, file_name, tags, coerce)
-
-    def add(self, string, tags=None, coerce=False):
-        """ Adds a string to the blockchain.
-
-        Use this method to store simple string literals. If you are interested
-        in object storage, you can use add_object() or serialize the object
-        yourself and add the serialization to the blockchain using this method.
-
-        The acting user must have 'can_write' permissions.
-
-        Args:
-            string (str): the string to add to the blockchain
-            tags (any): metadata to record alongside the string
-            coerce (bool): force tags into the proper form (see _normalize()
-
-        Raises:
-            ValueError: if the string begins with '"Error: '
-
-        Returns:
-            dict: the new Transaction Object
-        """
-        if string.startswith('"Error: '):
-            raise ValueError(
-                "Serializations cannot begin with '\"Error: '")
-
-        fields = {
-            "user": self._user(),
-            "content_string": string,
-            "metadata": self._normalize(tags, coerce=coerce)
-        }
-
-        return self._call_api("/store/add", fields)["result"]
 
     def get_content(self, content_hash, download=False, decode=False):
         """ Retrieves content from the blockchain using its hash.
@@ -635,22 +627,21 @@ class BlockchainUser:
                          sort=True, reverse=False, **kwargs):
         """ Queries the blockchain for transactions.
 
-        This method is intended to retrieve transaction metadata. While this
-        method *can* retrieve string content added to the blockchain with
-        add_object() or add_string(), it will only return a download URL for
-        binary content added with add_bytes() or add_file(). To reliably
-        retrieve content form the blockchain, use get_content().
+        This method is intended to retrieve transaction metadata, *not* content.
+        While this method *can* retrieve string content, it will only return a
+        download URL for binary content. To reliably retrieve content form the
+        blockchain, use get_content().
 
         The acting user must have 'can_read' permissions.
 
         Args:
-            coerce (bool): force tags into the proper form (see _normalize()
+            coerce (bool): force tags into the proper form (see _normalize())
             with_content (bool): if set to True, a 'content' field will be
                 populated for each Transaction Object when possible. If string
                 content is encountered, it will be returned in the content
                 field. If binary content is encountered, the content field will
                 contain a URL that can be used to download the content instead
-                of the content itself. Additionally,
+                of the content itself.
             sort (bool): if set to True, transactions will be returned in
                 sorted order. By default, transactions are not guaranteed
                 to be returned in sorted order.
