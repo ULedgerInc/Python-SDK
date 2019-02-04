@@ -169,22 +169,12 @@ class BlockchainUser:
 
         return response
 
-    def _call_api2(self, endpoint, fields, download=False, decode=False):
+    def _call_api2(self, endpoint, fields, download=False):
         """ Calls the API and streams its response.
-
-        This method prefers to return the raw response content as a
-        bytestring, but you can set decode to True to try and have it
-        decode the response content using utf-8. Alternatively, you
-        can set download to True to have the raw content written to a
-        file in your Downloads folder instead.
-
-        # TODO allow tag-based decoding behavior
 
         Args:
             endpoint (str): the API endpoint to request from
             fields (dict): the fields used to construct the multipart request
-            decode (bool): try to decode the response bytestring using utf-8.
-                If decoding fails, the bytestring will be used as a fallback.
             download (bool): if download is True, the raw response bytestring
                 will be saved to the Downloads folder instead of being returned.
 
@@ -222,18 +212,7 @@ class BlockchainUser:
             r.close()
             return None
 
-        # Try to decode the content using utf-8.
-        # If decoding fails, fall back to the raw response.
-        if decode:
-            r.encoding = 'utf-8'
-            try:
-                response = r.text
-            except UnicodeDecodeError:
-                response = r.content
-        else:
-            response = r.content
-
-        return response
+        return r.content
 
     @staticmethod
     def _normalize(md, coerce=False, dumps=True, key="tags"):
@@ -592,36 +571,24 @@ class BlockchainUser:
             file_name = os.path.basename(file.name)
             return self._add_stream(file, file_name, tags, coerce)
 
-    def get_content(self, content_hash, download=False, decode=False):
+    def get_content(self, content_hash, download=False):
         """ Retrieves content from the blockchain using its hash.
-
-        Each piece of content stored on the blockchain is indexed by its
-        SHA2-256 multihash. This method will search the blockchain for a
-        multihash and return the content that created it. This is compatible
-        with InterPlanetary File System protocol. Use helpers.ipfs_hash()
-        to create a SHA-256 multihash.
-
-        By default, the content will be returned as a bytestring. However,
-        you can set decode to True to try and decode the content with utf-8.
-        Alternatively, you can set download to True to write the content to a
-        file in your Downloads folder.
 
         The acting user must have 'can_read' permissions.
 
         Args:
-            content_hash (str): a multihash to search for in the blockchain
-            decode (bool): try to decode the raw content using utf-8.
-            download (bool): if download is True, the content will be saved to
+            content_hash (str): a multihash to search for in the blockchain.
+                Use helpers.ipfs_hash() to create a SHA-256 multihash.
+            download (bool): if download is True, the content will be saved as
                 a file in your Downloads folder instead of being returned.
 
         Returns:
-            bytes: if decode is False or if decoding fails
-            str: if decode is True and decoding succeeds
+            bytes: if the content hash was found on the blockchain
             None: if download is True
         """
         endpoint = "/store/content?hash={0}".format(content_hash)
         fields = {"user": self._user()}
-        return self._call_api2(endpoint, fields, download, decode)
+        return self._call_api2(endpoint, fields, download)
 
     def get_transactions(self, coerce=False, with_content=False,
                          sort=True, reverse=False, **kwargs):
