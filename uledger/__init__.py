@@ -19,13 +19,13 @@ For more information, see the API documentation.
 The ULedger API specifies two discrete groups of operations: data manipulation
 and user manipulation. Through data manipulation operations, you can read and
 write transactions to and from the blockchain, verify transactions, query
-transactions, and request transaction content.
+transactions, and retrieve transaction content.
 
 For extra management and security, the ULedger API also supports a set of user
-manipulation operations through permission-based access control. In order to
+manipulation operations using permission-based access control. In order to
 make requests to the ULedger API, you must provide a valid set of user
-credentials (an access key and a secret key, or username and password)
-Additionally, the user must have the appropriate permissions for their chosen
+credentials (an access key and a secret key, or username and password).
+The user in question must have the sufficient permissions for the desired
 operation. A user can have any combination of 'can_read', 'can_write',
 'can_add_user', and 'can_add_permission' permissions.
 
@@ -40,7 +40,7 @@ permanent access to all four permissions and cannot be deleted. To begin using
 your blockchain, you will first need to set the super admin's access key and
 secret key.
 
-By design, ULedger API does NOT support password recovery. If you lose your
+By design, the ULedger API does NOT support password recovery. If you lose your
 secret key, you cannot get it back or reset it. It is imperative that you keep
 your secret keys safe and secure, especially for the super admin.
 
@@ -67,7 +67,7 @@ Basic Data Manipulation:
         'merkle_proof': {
             'hashes': [
                 ...,
-        ]}
+        ]},
         'author': 'admin'
     }
     >>> admin.verify(basic_add['transaction_hash'])
@@ -79,21 +79,20 @@ Basic Querying:
     >>> trx = admin.get_transactions(transaction_hash=basic_add['transaction_hash'])
     >>> print(trx)
     [{
-        'timestamp': 1549322163,
-        'content_hash': 'QmdLMNBvckm4FhQhsh2sdo1gcAQfCbBFBa9f9mqBdJZDWE',
-        'block_height': 1241480,
-        'transaction_hash': 'QmeWG4DEGyFKzZHTPoA8dCayfVTEyjN6SDhX1qXmcHEKiU',
-        'content_size': 689442,
-        'merkle_root': 'QmeWG4DEGyFKzZHTPoA8dCayfVTEyjN6SDhX1qXmcHEKiU',
+        'timestmap': 1549320863,
+        'content_hash': 'QmR6vwie4jZiLeUiMZwJjTRMzS55ZMbMrXUCXcwRb3kTt9',
+        'block_height': 1241472,
+        'transaction_hash': 'QmagmMC4T2zAbVYHX8FzdircTUdtZuYgTQWdqMs6NaHrAp'
+        'content_size': 12,
+        'merkle_root': 'QmagmMC4T2zAbVYHX8FzdircTUdtZuYgTQWdqMs6NaHrAp',
         'merkle_proof': {
             'hashes': [
-                ...
+                ...,
         ]},
         'tags': [
             ...
         ],
-        'author': 'admin',
-        'extension': '.png'
+        'author': 'admin'
     }]
     >>> admin.get_transactions(content_hash=basic_add['content_hash']) == trx
     True
@@ -112,7 +111,7 @@ Basic User Manipulation:
         'access_key': <jackson's access key>,
         'secret_key': <jackson's secret key>
     }
-    >>> admin.set_permissions(jackson.access_key, ("can read", "can_write"))
+    >>> admin.set_permissions(jackson.access_key, ("can_read", "can_write"))
     {
         'error': 'false',
         'access_key': <jackson's access key>,
