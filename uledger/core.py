@@ -365,38 +365,42 @@ class BlockchainUser:
 
         return self.__class__(self.url, self.token, access_key, secret_key)
 
-    def set_permissions(self, target_access_key, authorize=None, revoke=None):
+    def set_permissions(self, target_access_key, authorize='', revoke=''):
         """ Grants and/or revokes permissions to/from a user.
 
-        Permissions specified in both authorize and revoke will be set to False.
-        Repeatedly modifying a permission does nothing. You can grant and
-        revoke permissions from yourself. The super admin cannot have their
+        Permissions that are specified in both authorize and revoke will be set
+        to False. Repeatedly modifying a permission does nothing. You can grant
+        and revoke permissions from yourself. The super admin cannot have their
         permissions modified.
+
+        Permissions are designated using character strings composed of 'r', 'w',
+        'u', and 'p', which stand for 'can_read', 'can_write', 'can_add_user',
+        and 'can_add_permission' respectively. Any combination is valid.
 
         The acting user must have 'can_add_permission' permissions.
 
         Args:
             target_access_key (str): A user to authorize.
-            authorize (str, tuple): A tuple or space-separated string of
-                permissions to grant to the user.
-            revoke (str, tuple): A tuple or space-separates string of
-                permissions to revoke from the user.
+            authorize (str): A string of characters designating permissions to
+                to grant to the user.
+            revoke (str): A string of characters designating permissions to
+                revoke from the user.
 
         Returns:
             dict: the user's updated information including their access
                 key and any permissions they still have access to
         """
-        # Wrap permission strings in a list. Now single permissions can be
-        # provided as strings rather than inside of a tuple.
-        if isinstance(authorize, str):
-            authorize = [authorize]
-        if isinstance(revoke, str):
-            revoke = [revoke]
-
+        permissions = {
+            'r': 'can_read',
+            'w': 'can_write',
+            'u': 'can_add_user',
+            'p': 'can_add_permission'
+        }
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
-            authorize=authorize, revoke=revoke)}
-
+            authorize=[permissions[c] for c in authorize if c in permissions],
+            revoke=[permissions[c] for c in revoke if c in permissions])
+        }
         return self._call_api("/store/authorize", fields)
 
     def get_permissions(self, target_access_key):

@@ -111,7 +111,7 @@ Basic User Manipulation:
         'access_key': <jackson's access key>,
         'secret_key': <jackson's secret key>
     }
-    >>> admin.set_permissions(jackson.access_key, ("can_read", "can_write"))
+    >>> admin.set_permissions(jackson.access_key, 'rw')
     {
         'error': 'false',
         'access_key': <jackson's access key>,
