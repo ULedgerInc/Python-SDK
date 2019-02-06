@@ -99,7 +99,7 @@ Basic Querying:
     >>> admin.get_transactions(last_transactions=1) == trx
     True
     >>> import time
-    >>> admin.get_transactions(range={"From": 0, "To":time.time()}) == trx
+    >>> admin.get_transactions(range=(0, time.time())) == trx
     True
 
 Basic User Manipulation:
