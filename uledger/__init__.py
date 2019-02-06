@@ -25,9 +25,9 @@ For extra management and security, the ULedger API also supports a set of user
 manipulation operations using permission-based access control. In order to
 make requests to the ULedger API, you must provide a valid set of user
 credentials (an access key and a secret key, or username and password).
-The user in question must have the sufficient permissions for the desired
-operation. A user can have any combination of 'can_read', 'can_write',
-'can_add_user', and 'can_add_permission' permissions.
+The user in question must have sufficient permissions for the desired operation.
+A user can have any combination of 'can_read', 'can_write', 'can_add_user', and
+'can_add_permission' permissions.
 
 'can_read': the user can read content from the blockchain
 'can_write': the user can write content to the blockchain

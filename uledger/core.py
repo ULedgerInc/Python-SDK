@@ -13,13 +13,15 @@
 #    limitations under the License.
 
 """ This is the core module for the ULedger SDK. It implements the
-BlockchainUser class, which acts as an interfaces to the ULedger API. """
+BlockchainUser class, which acts as an interfaces to the ULedger API.
+"""
 
 from collections import abc
 import io
 import json
 import operator
 import os
+import time
 
 import requests
 from requests_toolbelt import MultipartEncoder
@@ -34,25 +36,11 @@ class BlockchainUser:
     To create a BlockchainUser object, you will need a URL and API token for a
     blockchain and a key-pair belonging to one of its users.
 
-    IF YOU LOSE YOUR SECRET KEY, YOU CANNOT GET IT BACK OR RESET IT.
-    It is your responsibility to store your secret key and keep it secure.
-
-    Each user on the blockchain has an associated set of permissions. A user
-    must have access to the correct permissions to interact with the blockchain.
-    A user can have any combination of 'can_read', 'can_write', 'can_add_user',
-    and 'can_add_permission' permissions.
-
-    'can_read': the user can read content from the blockchain
-    'can_write': the user can write content to the blockchain
-    'can_add_user': the user can add new users to the blockchain
-    'can_add_permission': the user can grant or revoke permissions
-
-    Args:
-        url (str): the url for a ULedger blockchain
-        token (str): the blockchain's API token
-        access_key (str): the access key for one of the blockchain's users.
-            Access keys are *not* unique.
-        secret_key (str): the user's secret key
+    Attributes:
+        url (str): A URL for a ULedger blockchain.
+        token (str): The blockchain's API token.
+        access_key (str): An access key for one of the blockchain's users.
+        secret_key (str): The user's secret key.
     """
     def __init__(self, url, token, access_key, secret_key):
         self.url = url
@@ -61,7 +49,7 @@ class BlockchainUser:
         self.secret_key = secret_key
 
     def __repr__(self):
-        return ("{0}({1}, {2}, {3}, {4})".format(
+        return ("{}({}, {}, {}, {})".format(
             self.__class__.__name__,
             self.url, self.token, self.access_key, self.secret_key))
 
@@ -82,24 +70,23 @@ class BlockchainUser:
                 to add to the blockchain. This should usually come from open().
                 Otherwise, it should subclass io.BufferedIOBase or io.RawIOBase.
                 The stream content cannot exceed 50MiB.
-            filename (str): An optional filename to record as metadata.
-                If filename is not specified, this method will use the actual
-                file name if available or the IPFS hash as a fallback.
-            tags (any): metadata to record alongside the binary content
-            coerce (bool): force tags into the proper form (see _normalize())
+            filename (str): An optional filename to record as metadata. If left
+                unspecified, this method will use the actual file name if
+                available and the stream's SHA2-256 multihash as a fallback.
+            tags (any): Metadata to record alongside the binary content.
+            coerce (bool): Force tags into the proper form (see _normalize()).
 
         Raises:
-            ValueError: if the stream begins with '"Error: '
-            OSError: if the stream contains more than 50MiB of content
+            ValueError: The content in stream begins with '"Error: '.
+            OSError: The content in stream was more than 50MiB.
 
         Returns:
             dict: the new Transaction Object
         """
-        # If the API server encounters an error, it will respond with an error
-        # message starting with '"Error: '. However, if one were to add their
-        # own "fake" error message (i.e. a string starting with '"Error: ')
-        # to the blockchain, then there would be no way to tell the two apart.
-        # To avoid this, bytestrings starting with '"Error: ' are disallowed.
+        # If the API server encounters an error, it will respond with a message
+        # starting with '"Error: '. But if someone wants to add one of those
+        # strings to the blockchain, there would be no way to tell them apart.
+        # To avoid this, byte strings starting with b'"Error: ' are disallowed.
         if stream.read(8) == b'"Error: ':
             raise ValueError('The stream cannot begin with '"Error: '")
 
@@ -132,17 +119,17 @@ class BlockchainUser:
 
         Args:
             endpoint (str): An API endpoint to request from.
-            fields (dict): Fields used to construct the multipart request
+            fields (dict): Fields used to construct the multipart request.
 
         Returns:
             A dict with 0, 1, or 2+ Transaction Objects.
 
         Raises:
-            APIError: Something went wrong with the API
-            requests.RequestException: Something went wrong with the request
+            APIError: Something went wrong with the API.
+            requests.RequestException: Something went wrong with the request.
         """
         # Format the request information.
-        url = "{0}{1}".format(self.url, endpoint)
+        url = self.url + endpoint
         data = MultipartEncoder(fields=fields)
         headers = {"Content-Type": data.content_type, "token": self.token}
 
@@ -162,23 +149,28 @@ class BlockchainUser:
     def _call_api2(self, endpoint, fields, download=False):
         """ Calls the API and streams its response.
 
+        This function has two return types to help differentiate between
+        transactions that are downloaded and transactions that contain empty
+        strings or byte strings.
+
         Args:
             endpoint (str): An API endpoint to request from.
             fields (dict): Fields used to construct the multipart request.
-            download (bool): If download is True, the raw response bytestring
-                will be saved to the Downloads folder instead of being returned.
+            download (bool): If download is True, the response will be saved as
+                a file in the Downloads folder instead of being returned.
 
         Returns:
-            bytes: if decode is False
-            str: if decode is True and decoding succeeds
-            None: if download is True
+            bytes: If the request was successful, the transaction content will
+                be returned as a byte string.
+            None: If the request was successful and download is True, then None
+                will be returned.
 
         Raises:
-            APIError: Something went wrong with the API
-            requests.RequestException: Something went wrong with the request
+            APIError: Something went wrong with the API.
+            requests.RequestException: Something went wrong with the request.
         """
         # Format the request information
-        url = "{0}{1}".format(self.url, endpoint)
+        url = self.url + endpoint
         data = MultipartEncoder(fields=fields)
         headers = {"Content-Type": data.content_type, "token": self.token}
 
@@ -228,8 +220,8 @@ class BlockchainUser:
         Returns:
             JSON: if dumps is True, the normalized metadata will be returned
                 as a JSON-formatted string.
-            list of str: if dumps is False, the normalized metadata will be
-                returned as a list of strings.
+            [str]: if dumps is False, the normalized metadata will be returned
+                as a list of strings.
         """
         if md is None:
             tag_list = []
@@ -238,7 +230,7 @@ class BlockchainUser:
         elif isinstance(md, bytes):
             tag_list = [md.decode()]
         elif isinstance(md, dict):
-            tag_list = ["{0}={1}".format(key, value) for key, value in md.items()]
+            tag_list = ["{}={}".format(key, value) for key, value in md.items()]
         elif not isinstance(md, abc.Iterable):  # Something with __iter__()
             tag_list = [str(md)]
         else:
@@ -279,8 +271,9 @@ class BlockchainUser:
         This method will set the super admin's access key and secret key using
         self.access_key and self.secret key. The secret key must be at least 8
         characters long and contain at least one lowercase, uppercase, digit,
-        and punctuation character. There are no restrictions on access keys.
-        Use helpers.generate_secret_key() to generate a random secret key.
+        and punctuation character. For generating and validating secret keys,
+        see helpers.generate_secret_key() and helpers.validate_secret_key().
+        There are no restrictions on access keys.
 
         IT IS IMPERATIVE THAT YOU DO NOT LOSE ACCESS TO THE SUPER ADMIN.
         If you lose the super admin's secret key, a bad actor will be able to
@@ -301,19 +294,17 @@ class BlockchainUser:
     def get_users(self, name="", access_key=""):
         """ Gets a list of users with access to the blockchain.
 
-        name and access_key cannot be used together.
-
         The acting user must have 'can_read' permissions.
 
         Args:
             name (str): A user name to search for. If specified, the user(s)
                 with the exact same name (if any) will be returned.
             access_key (str): An access key to search for. If specified, the
-                matching user will be returned.
+                associated user will be returned.
 
         Returns:
-            list of dict: If a matching name or access key is found, the
-                matching user(s) is/are returned as a list of dictionaries.
+            [dict]: If a matching name or access key is found, the matching
+                user(s) is/are returned as a list of dictionaries.
                 If no arguments are specified, this will be a list of every
                 user on the blockchain instead.
             []: If no matching name or access key is found.
@@ -335,18 +326,18 @@ class BlockchainUser:
 
         Args:
             name (str): A name for the new user. Names don't have to be unique.
-            secret_key(str): A secret key for the new user. If unspecified, the
-                API server will assign you a random one. You can also generate
-                your own using helpers.generate_secret_key(). Otherwise, your
-                secret key must be at least 8 characters long and contain at
-                least one lowercase, uppercase, digit, and punctuation mark.
+            secret_key (str): A secret key for the new user. If unspecified,
+                the API server will assign you a random one. Secret keys must be
+                at least 8 characters long and contain at least one lowercase,
+                uppercase, digit, and punctuation character. For help, see
+                helpers.generate_secret_key() and helpers.validate_secret_key().
 
         Returns:
-            BlockchainUser: Created from the blockchain's URL and token
-                and the new user's key pair.
+            BlockchainUser: Created from the blockchain's URL and API token and
+                the new user's key pair.
 
         Raises:
-            ValueError: If secret_key is not strong enough.
+            ValueError: secret_key was not strong enough.
         """
         if secret_key and not helpers.validate_secret_key(secret_key):
             raise ValueError(
@@ -449,12 +440,12 @@ class BlockchainUser:
         The acting user must have 'can_write' permissions.
 
         Args:
-            data (string, bytestring): Data to add to the blockchain.
+            data (string, bytes): Data to add to the blockchain.
             tags (any): Metadata to record alongside the data.
             coerce (bool): Force tags into the proper form (see _normalize()).
 
         Raises:
-            ValueError: If the data is a string that begins with '"Error: '.
+            ValueError: data begins with '"Error: '.
 
         Returns:
             dict: the new Transaction Object
@@ -463,10 +454,9 @@ class BlockchainUser:
             with io.BytesIO(data) as file:
                 return self._add_stream(file, tags, coerce)
 
-        # If the API server encounters an error, it will respond with an error
-        # message starting with '"Error: '. However, if one were to add their
-        # own "fake" error message (i.e. a string starting with '"Error: ')
-        # to the blockchain, then there would be no way to tell the two apart.
+        # If the API server encounters an error, it will respond with a message
+        # starting with '"Error: '. But if someone wants to add one of those
+        # strings to the blockchain, there would be no way to tell them apart.
         # To avoid this, strings starting with '"Error: ' are disallowed.
         if isinstance(data, str) and data.startswith('"Error: '):
             raise ValueError("String data cannot begin with '\"Error: '")
@@ -513,8 +503,8 @@ class BlockchainUser:
         The acting user must have 'can_read' permissions.
 
         Args:
-            content_hash (str): A multihash to search for in the blockchain.
-                Use helpers.ipfs_hash() to create a SHA2-256 multihash.
+            content_hash (str): A SHA2-256 multihash to search for on the
+                blockchain (see helpers.ipfs_hash()).
             download (bool): If True, the content will be saved as a file in
                 your Downloads folder instead of being returned.
 
@@ -522,7 +512,7 @@ class BlockchainUser:
             bytes: If the content hash was found on the blockchain
             None: If download is True
         """
-        endpoint = "/store/content?hash={0}".format(content_hash)
+        endpoint = "/store/content?hash={}".format(content_hash)
         fields = {"user": self._user()}
         return self._call_api2(endpoint, fields, download)
 
@@ -563,26 +553,50 @@ class BlockchainUser:
                 the tags specified here. tags_any cannot be used with tags_all.
             last_transactions (int): The number of most recent transactions to
                 request from the blockchain.
-            range (dict): A time range to search on the blockchain. This must
-                be a {"From": A, "To": B} dictionary where A and B are Unix
-                timestamps. A and be must be non-negative integers and A must
-                be less than or equal to B. Matching transactions must have
-                been recorded to the blockchain during this interval.
-            page (int): The page of matching transactions to request from the
-                API server. If specified, a page containing up to 100 matching
+            range (int, float, tuple): A time range to search on the blockchain.
+                This can be an integer, float, or 2-tuple. Integers and floats
+                can be positive or negative. If a negative integer or float is
+                specified, the blockchain will perform a look back and return
+                transactions on the range [0, time.time() - <num>]. If a
+                positive integer or float is specified, the blockchain will
+                perform a look ahead and return transactions on the range
+                [<num>, time.time()]. If an (A, B) tuple is specified, the
+                blockchain will return transactions on the range [A, B] or
+                [B, A] depending on whether A < B. Matching transactions must
+                have been recorded to the blockchain during the specified range.
+            page (int): A page of matching transactions to request from the API
+                server. If specified, a page containing up to 100 matching
                 transactions will be returned. If left unspecified, every
                 matching transaction will be returned. page must be used with
                 at least one other query parameter.
 
         Returns:
-            list of dict: If matching transactions were found, they will be
-                returned as a list of dictionaries (Transaction Objects).
+            [dict]: If matching transactions were found, they will be returned
+                as a list of dictionaries (Transaction Objects).
             []: if no matches were found, an empty list will be returned.
+
+        Raises:
+            ValueError: An illegal combination of parameters was used.
         """
         # Ensure that transaction_hash is only ever used by itself to prevent
         # 'result': [{'merkle_proof': {}}]
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
             raise ValueError("Illegal parameter combination.")
+
+        # Normalize any shortcuts used with the range arguments.
+        _range = kwargs.get("range")
+        now = time.time()
+        if isinstance(_range, (int, float)):
+            if _range < 0:
+                kwargs['range'] = {'From': now + _range, 'To': now}
+            elif _range >= 0:
+                kwargs['range'] = {'From': _range, 'To': now}
+        elif isinstance(_range, tuple):
+            a, b = _range[0], _range[1]
+            if a < b:
+                kwargs['range'] = {'From': _range[0], 'To': _range[1]}
+            else:
+                kwargs['range'] = {'From': _range[1], 'To': _range[0]}
 
         # Normalize any metadata that's present. This doubles as validation.
         try:
