@@ -417,12 +417,12 @@ class BlockchainUser:
         Args:
             target_access_key (str): A user to retrieve permissions from.
         """
-        info = self.get_users(access_key=target_access_key)
+        info = self.get_users(access_key=target_access_key)[0]
         return {
-            'can_add_user': info['can_read'],
-            'can_add_permission': info['can_add_permission'],
             'can_read': info['can_read'],
-            'can_write': info['can_write']
+            'can_write': info['can_write'],
+            'can_add_user': info['can_read'],
+            'can_add_permission': info['can_add_permission']
         }
 
     def deactivate(self, target_access_key):
