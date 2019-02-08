@@ -398,10 +398,16 @@ class BlockchainUser:
         }
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
-            authorize=[permissions[c] for c in authorize if c in permissions],
-            revoke=[permissions[c] for c in revoke if c in permissions])
+            revoke=[permissions[c] for c in revoke if c in permissions],
+            authorize=[permissions[c] for c in authorize if c in permissions])
         }
-        return self._call_api("/store/authorize", fields)
+        response = self._call_api("/store/authorize", fields)
+        return {
+            'can_read': response.get('can_read') or False,
+            'can_write': response.get('can_write') or False,
+            'can_add_user': response.get('can_add_user') or False,
+            'can_add_permission': response.get('can_add_permission') or False
+        }
 
     def get_permissions(self, target_access_key):
         """ Returns a user's current permissions.
@@ -411,7 +417,7 @@ class BlockchainUser:
         Args:
             target_access_key (str): A user to retrieve permissions from.
         """
-        info = self.get_users(access_key=target_access_key)[0]
+        info = self.get_users(access_key=target_access_key)
         return {
             'can_add_user': info['can_read'],
             'can_add_permission': info['can_add_permission'],
@@ -587,7 +593,7 @@ class BlockchainUser:
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
             raise ValueError("Illegal parameter combination.")
 
-        # Normalize any shortcuts used with the range arguments.
+        # Handle any shortcuts used with the range argument.
         _range = kwargs.get("range")
         now = time.time()
         if isinstance(_range, (int, float)):
