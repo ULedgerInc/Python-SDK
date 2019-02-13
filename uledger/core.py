@@ -386,12 +386,7 @@ class BlockchainUser:
             dict: If all goes well, the user's updated information (including
                 their access key, name, ID, and permissions) will be returned.
         """
-        permissions = {
-            'r': 'can_read',
-            'w': 'can_write',
-            'u': 'can_add_user',
-            'p': 'can_add_permission'
-        }
+        permissions = helpers.permissions
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
             revoke=[permissions[c] for c in revoke if c in permissions],

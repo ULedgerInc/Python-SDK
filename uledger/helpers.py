@@ -28,6 +28,14 @@ charsets = [
     '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~',
 ]
 
+# A character-permission dictionary to parse shorthand permission strings.
+permissions = {
+    'r': 'can_read',
+    'w': 'can_write',
+    'u': 'can_add_user',
+    'p': 'can_add_permission'
+}
+
 
 def flatten(iterable):
     """ Yields every individual element from an iterable or nested iterable.
