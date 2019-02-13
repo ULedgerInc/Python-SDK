@@ -664,21 +664,20 @@ class BlockchainUser:
 
         return transactions
 
-    def verify(self, transaction_hash=None, content_hash=None,
-               content_string=None, filename=None):
-        """ Checks whether a hash, string, or file appears on the blockchain.
+    def verify(self, transaction_hash='', content_hash='', content='', file=''):
+        """ Checks whether a hash, string, or file is present on the blockchain.
 
         If multiple arguments are supplied, only one will be considered.
         Arguments are prioritized from left to right:
-            transaction_hash > content_hash > content_string > filename
+            transaction_hash > content_hash > content > file
 
         The acting user must have 'can_read' permissions.
 
         Args:
             transaction_hash (str): A transaction hash to verify.
             content_hash (str): A content hash to verify.
-            content_string (str): A content string to verify.
-            filename (str): A path to a file to verify.
+            content (str): A content string to verify.
+            file (str): A path to a file to verify.
 
         Returns:
             True: If the verification succeeded, True will be returned.
@@ -690,12 +689,12 @@ class BlockchainUser:
             fields["metadata"] = json.dumps({"transaction_hash": transaction_hash})
         elif content_hash:
             fields["metadata"] = json.dumps({"content_hash": content_hash})
-        elif content_string:
-            string_hash = helpers.ipfs_hash(content_string)
+        elif content:
+            string_hash = helpers.ipfs_hash(content)
             fields["metadata"] = json.dumps({"content_hash": string_hash})
-        elif filename:
-            with open(filename, mode='rb') as file:
-                file_hash = helpers.ipfs_hash(file.read())
+        elif file:
+            with open(file, mode='rb') as f:
+                file_hash = helpers.ipfs_hash(f.read())
             fields["metadata"] = json.dumps({"content_hash": file_hash})
 
         try:
