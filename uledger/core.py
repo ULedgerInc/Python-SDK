@@ -392,13 +392,7 @@ class BlockchainUser:
             revoke=[permissions[c] for c in revoke if c in permissions],
             authorize=[permissions[c] for c in authorize if c in permissions])
         }
-        response = self._call_api("/store/authorize", fields)
-        return {
-            'can_read': response.get('can_read') or False,
-            'can_write': response.get('can_write') or False,
-            'can_add_user': response.get('can_add_user') or False,
-            'can_add_permission': response.get('can_add_permission') or False
-        }
+        return self._call_api("/store/authorize", fields)
 
     def get_permissions(self, target_access_key):
         """ Retrieves a user's current permissions.
@@ -412,13 +406,7 @@ class BlockchainUser:
             dict: If all goes well, the user's current information (including
                 their access key, name, ID, and permissions) will be returned.
         """
-        info = self.get_users(access_key=target_access_key)[0]
-        return {
-            'can_read': info['can_read'],
-            'can_write': info['can_write'],
-            'can_add_user': info['can_read'],
-            'can_add_permission': info['can_add_permission']
-        }
+        return self.get_users(access_key=target_access_key)[0]
 
     def deactivate(self, target_access_key):
         """ Revokes all permissions from a user.
