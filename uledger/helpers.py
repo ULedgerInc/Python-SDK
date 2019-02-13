@@ -20,6 +20,7 @@ import random
 import base58
 import multihash
 
+# A list of character sets to use for generating random strings.
 charsets = [
     'abcdefghijklmnopqrstuvwxyz',
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
