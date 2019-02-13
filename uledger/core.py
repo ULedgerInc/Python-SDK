@@ -385,12 +385,29 @@ class BlockchainUser:
         Returns:
             dict: If all goes well, the user's updated information (including
                 their access key, name, ID, and permissions) will be returned.
+
+        Raises:
+            ValueError: If an invalid string is provided to revoke or authorize.
         """
-        permissions = helpers.permissions
+        permissions = helpers.permissions  # alias
+        authorize_list = []
+        revoke_list = []
+
+        for c in authorize:
+            try:
+                authorize_list.append(permissions[c])
+            except KeyError:
+                raise ValueError("invalid authorize: '{}'".format(authorize))
+        for c in revoke:
+            try:
+                revoke_list.append(permissions[c])
+            except KeyError:
+                raise ValueError("invalid revoke: '{}'".format(revoke))
+
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
-            revoke=[permissions[c] for c in revoke if c in permissions],
-            authorize=[permissions[c] for c in authorize if c in permissions])
+            revoke=revoke_list,
+            authorize=authorize_list)
         }
         return self._call_api("/store/authorize", fields)
 
