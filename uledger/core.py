@@ -580,6 +580,8 @@ class BlockchainUser:
         # 'result': [{'merkle_proof': {}}]
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
             raise ValueError("transaction_hash must be used alone.")
+        elif kwargs.get("page") and len(kwargs) == 1:
+            raise ValueError("page cannot be used alone.")
 
         # Handle any shortcuts used with the range argument.
         _range = kwargs.get("range")
