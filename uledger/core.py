@@ -593,8 +593,8 @@ class BlockchainUser:
         Raises:
             ValueError: An illegal combination of parameters was used.
         """
-        # Ensure that transaction_hash is only ever used by itself to prevent
-        # 'result': [{'merkle_proof': {}}]
+        # Ensure that transaction_hash is only ever used by itself to help
+        # prevent 'result': [{'merkle_proof': {}}]
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
             raise ValueError("transaction_hash must be used alone.")
         elif kwargs.get("page") and len(kwargs) == 1:
@@ -650,14 +650,16 @@ class BlockchainUser:
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             while 1:
                 try:
-                    result = self._call_api(endpoint, fields)["result"]
+                    page = self._call_api(endpoint, fields)["result"]
                 except APIError as e:
                     if str(e) == "No transactions for specified time range.":
                         break  # We've gone too far
                     else:
                         raise  # Elevate a legitimate error
+                if page == [{'merkle_proof': {}}]:  # Bad transaction hash
+                    return []
                 try:
-                    transactions.extend(result)
+                    transactions.extend(page)
                 except TypeError:
                     break  # No results were found
                 if len(transactions) < 100:
@@ -696,6 +698,7 @@ class BlockchainUser:
             fields["metadata"] = json.dumps({"transaction_hash": transaction_hash})
         elif content_hash:
             fields["metadata"] = json.dumps({"content_hash": content_hash})
+        # To speed things up, we'll hash the content or file if provided.
         elif content:
             string_hash = helpers.ipfs_hash(content)
             fields["metadata"] = json.dumps({"content_hash": string_hash})
