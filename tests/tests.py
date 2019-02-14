@@ -16,10 +16,8 @@
 
 """ This module is a test suite for the ULedger SDK.
 
-In order to run the test suite, you will need to populate a "creds.json" file
-with the URL-token pair for a ULedger blockchain and the key-pair for two
-users named "admin" and "lumberjack". admin should have all permissions while
-lumberjack should have read and write permissions.
+Currently, the tests are NOT blockchain-agnostic. Please contact ULedger for
+the appropriate blockchain credentials.
 """
 
 import json
@@ -28,6 +26,7 @@ import os
 import random
 import string
 import sys
+import time
 import unittest
 
 # Import the uledger package regardless of where this script is run from.
@@ -429,6 +428,259 @@ class TestPermissions(unittest.TestCase):
             perms, {'error': 'false', 'access_key': self.ak,
                     'can_read': True, 'can_write': True})
         self.restore()
+
+
+class TestGetTransactions(unittest.TestCase):
+    """ Tests the BlockchainUser.get_transactions() method. """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.now = int(time.time())
+
+    def test_content_hash(self):
+        transactions = lumberjack.get_transactions(
+            content_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ',
+            with_content=True)
+        self.assertGreaterEqual(len(transactions), 371)
+
+        for t in transactions:
+            self.assertEqual(t['content'], 'a normal string', "content/hash mismatch: {}".format(t))
+
+        transactions0 = lumberjack.get_transactions(
+            content_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ',
+            page=0,
+            with_content=True)
+        self.assertEqual(len(transactions0), 100)
+
+        for t0 in transactions0:
+            self.assertIn(t0, transactions, "{} not in transactions".format(t0))
+
+    def test_transaction_hash(self):
+
+        transactions = lumberjack.get_transactions(
+            transaction_hash='QmbV7dexRqHDk85PRzKE1ZPscUFx5zYQMurpFLC1GVsbYE')
+        self.assertEqual(len(transactions), 1)
+
+    def test_range(self):
+        then = self.now - 3600
+        transactions = lumberjack.get_transactions(
+            range={"From": then, "To": self.now})
+        self.assertEqual(transactions, sorted(transactions, key=lambda x: x["timestamp"]))
+        for t in transactions:
+            self.assertLessEqual(then, t['timestamp'])
+            self.assertGreaterEqual(self.now, t['timestamp'])
+
+        transactions0 = lumberjack.get_transactions(
+            range={"From": then, "To": self.now}, page=0)
+        self.assertEqual(transactions0, sorted(transactions, key=lambda x: x["timestamp"]))
+        for t in transactions0:
+            self.assertLessEqual(then, t['timestamp'])
+            self.assertGreaterEqual(self.now, t['timestamp'])
+
+    def test_last_transactions(self):
+        transactions = lumberjack.get_transactions(last_transactions=101)
+        self.assertEqual(len(transactions), 101)
+
+        transactions0 = lumberjack.get_transactions(
+            last_transactions=101, page=0)
+        self.assertEqual(len(transactions0), 100)
+
+        transactions1 = lumberjack.get_transactions(
+            last_transactions=101, page=1)
+        self.assertEqual(len(transactions1), 1)
+
+        # This test is currently failing due to the page sorting issue.
+        self.assertEqual(transactions, transactions0 + transactions1)
+
+    def test_tags_any(self):
+        transactions = lumberjack.get_transactions(tags_any=["hi"])
+        transactions0 = lumberjack.get_transactions(tags_any=["hi"], page=0)
+        # This is not as strong as it could be due to the page sorting issue.
+        for t0 in transactions0:
+            self.assertIn(t0, transactions)
+
+    def test_tags_all(self):
+        transactions = lumberjack.get_transactions(tags_all=['hi', 'there'])
+        transactions0 = lumberjack.get_transactions(
+            tags_all=['hi', 'there'], page=0)
+        # This is not as strong as it could be due to the page sorting issue.
+        for t0 in transactions0:
+            self.assertIn(t0, transactions)
+
+    def test_page(self):
+        with self.assertRaises(uledger.APIError) as e:
+            lumberjack.get_transactions(page=0)
+            self.assertEqual(e.exception, "Unknown parameters. Check spelling.")
+
+    def test_bad_content_hash(self):
+        self.assertEqual(lumberjack.get_transactions(content_hash='hi'), [])
+
+    def test_bad_transaction_hash(self):
+        self.assertEqual(lumberjack.get_transactions(transaction_hash='hi'), [])
+
+    def test_bad_range(self):
+        # The SDK will shield us from stupid mistakes like negative numbers.
+        transactions = lumberjack.get_transactions(range={"From": -1, "To": 0})
+        self.assertEqual(len(transactions), 0)
+
+        # The SDK will shield us from inverted ranges by inverting them back.
+        transactions2 = lumberjack.get_transactions(range=(1, 0))
+        self.assertEqual(len(transactions2), 0)
+
+    def test_bad_lt(self):
+        with self.assertRaises(uledger.APIError) as e:
+            lumberjack.get_transactions(last_transactions=-1)
+            self.assertEqual(e.exception, "value cannot be a negative integer")
+
+        with self.assertRaises(uledger.APIError) as e:
+            lumberjack.get_transactions(last_transactions='a')
+            self.assertEqual(e.exception, 'last_transactions value must be an integer')
+
+    def test_matching_hashes(self):
+        with self.assertRaises(ValueError) as e:
+            lumberjack.get_transactions(
+                content_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ',
+                transaction_hash='Qmb4cFnvpxtbLaQxDCj1DXDWxS8Eori7M4AunDNNk5up3m')
+            self.assertEqual(e.exception, "transaction_hash must be used alone.")
+
+    def test_non_matching_hashes(self):
+        with self.assertRaises(ValueError) as e:
+            lumberjack.get_transactions(
+                content_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ',
+                transaction_hash='QmbhGeh1yoUszaQgtaKnPyXnrJE4VWLmNewmAHm6uVyFRh')
+            self.assertEqual(e.exception, "transaction_hash must be used alone.")
+
+    def test_good_content_bad_transaction(self):
+        with self.assertRaises(ValueError) as e:
+            lumberjack.get_transactions(
+                content_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ',
+                transaction_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ')
+            self.assertEqual(e.exception, "transaction_hash must be used alone.")
+
+    def test_bad_content_good_transaction(self):
+        with self.assertRaises(ValueError) as e:
+            lumberjack.get_transactions(
+                content_hash='hi',
+                transaction_hash='QmXWBNjQzK2jYNjAuW2i9YuhAA9jZRv9ihLQNBVqT94qxZ')
+            self.assertEqual(e.exception, "transaction_hash must be used alone.")
+
+    def test_bad_content_bad_transaction(self):
+        with self.assertRaises(ValueError) as e:
+            lumberjack.get_transactions(
+                content_hash='hi',
+                transaction_hash='star')
+            self.assertEqual(e.exception, "transaction_hash must be used alone.")
+
+    # TODO content combinations
+
+    def test_range_lt(self):
+        transactions = lumberjack.get_transactions(
+            range=(0, self.now), last_transactions=101)
+
+        transactions0 = lumberjack.get_transactions(
+            range=(0, self.now), last_transactions=101, page=0)
+
+        # Currently failing due to page sorting issue.
+        self.assertListEqual(transactions[:100], transactions0)
+
+    def test_range_any(self):
+        # tags_any appears to take priority over range; results aren't sorted
+        transactions = lumberjack.get_transactions(
+            range=(1541098870, 1541098879), tags_any=["there"])
+
+        transactions0 = lumberjack.get_transactions(
+            range=(1541098870, 1541098879), tags_any=["hi"], page=0)
+
+        # Currently failing due to page sorting issue.
+        self.assertListEqual(transactions[:100], transactions0)
+
+    def test_range_all(self):
+        transactions = lumberjack.get_transactions(
+            range=(1541531208, self.now), tags_all=["severity=warning"])
+
+        transactions0 = lumberjack.get_transactions(
+            range=(1541531208, self.now), tags_all=["severity=warning"], page=0)
+
+        # Currently failing due to page sorting issue.
+        self.assertListEqual(transactions[:100], transactions0)
+
+    def test_range_page(self):
+        transactions = lumberjack.get_transactions(range=-3600)
+        transactions0 = lumberjack.get_transactions(range=-3600, page=0)
+
+        # Currently failing due to page sorting issue.
+        self.assertListEqual(transactions[:100], transactions0)
+
+    def test_lt_any(self):
+        transactions = lumberjack.get_transactions(
+            last_transactions=101,
+            tags_any=["hi", "there"])
+        self.assertEqual(len(transactions), 101)
+
+        transactions0 = lumberjack.get_transactions(
+            last_transactions=101,
+            tags_any=["hi", "there"],
+            page=0)
+        self.assertEqual(len(transactions0), 100)
+
+        transactions1 = lumberjack.get_transactions(
+            last_transactions=101,
+            tags_any=["hi", "there"],
+            page=1)
+        self.assertEqual(len(transactions1), 1)
+
+        # Currently failing due to page sorting issue.
+        self.assertListEqual(transactions, transactions0 + transactions1)
+
+    def test_lt_all(self):
+        transactions = lumberjack.get_transactions(
+            last_transactions=101,
+            tags_all=["hi", "there"])
+        self.assertEqual(len(transactions), 101)
+
+        transactions0 = lumberjack.get_transactions(
+            last_transactions=101,
+            tags_all=["hi", "there"],
+            page=0)
+        self.assertEqual(len(transactions0), 100)
+
+        transactions1 = lumberjack.get_transactions(
+            last_transactions=101,
+            tags_all=["hi", "there"],
+            page=1)
+        self.assertEqual(len(transactions1), 1)
+
+        # Currently failing due to page sorting issue.
+        self.assertListEqual(transactions, transactions0 + transactions1)
+
+
+class TestGetContent(unittest.TestCase):
+    """ Tests the BlockchainUser.get_content() method. """
+    def test_string_content(self):
+        content = lumberjack.get_content(uledger.ipfs_hash("hello there"))
+        self.assertEqual(content, b"hello there")
+
+    def test_binary_content(self):
+        test = b"why hello there!"
+        lumberjack.add(test)
+        content = lumberjack.get_content(uledger.ipfs_hash(test))
+        self.assertEqual(content, test)
+
+    def test_download(self):
+        content = lumberjack.get_content(
+            uledger.ipfs_hash("hello there"), download=True)
+        self.assertEqual(content, None)
+        self.assertTrue(os.path.exists(os.path.join(
+                os.path.expanduser('~'), 'Downloads', uledger.ipfs_hash("hello there"))))
+
+    def test_bad_hash(self):
+        with self.assertRaises(uledger.APIError) as e:
+            lumberjack.get_content(uledger.ipfs_hash("something I never recorded"))
+            self.assertEqual(e.exception, "there is no transaction with given hash")
+
+    def test_blank(self):
+        content = lumberjack.get_content(uledger.ipfs_hash(''))
+        self.assertEqual(content, b'')
 
 
 class TestVerify(unittest.TestCase):
