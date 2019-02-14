@@ -94,7 +94,7 @@ class BlockchainUser:
         # returns None (such as tempfile.SpooledTemporaryFile).
         stream.seek(0, io.SEEK_END)
         if stream.tell() > 50 * 1024 * 1024:
-            raise OSError("The stream cannot be larger than 50MiB.")
+            raise OSError("The stream cannot be larger than 50MiB")
         stream.seek(0, io.SEEK_SET)
 
         if not filename:
@@ -596,9 +596,9 @@ class BlockchainUser:
         # Ensure that transaction_hash is only ever used by itself to help
         # prevent 'result': [{'merkle_proof': {}}]
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
-            raise ValueError("transaction_hash must be used alone.")
+            raise ValueError("transaction_hash must be used alone")
         elif kwargs.get("page") and len(kwargs) == 1:
-            raise ValueError("page cannot be used alone.")
+            raise ValueError("page cannot be used alone")
 
         # Handle any shortcuts used with the range argument.
         _range = kwargs.get("range")
