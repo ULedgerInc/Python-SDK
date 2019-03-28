@@ -136,7 +136,7 @@ Basic User Manipulation:
             'can_read': True,
             'can_write': True,
             'name': 'Jackson Parsons'
-        }
+        },
         ...
     ]
     >>> admin.deactivate(jackson.access_key)

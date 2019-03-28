@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 """ This is the core module for the ULedger SDK. It implements the
-BlockchainUser class, which acts as an interfaces to the ULedger API.
+BlockchainUser class, which acts as an interface to the ULedger API.
 """
 
 from collections import abc
@@ -60,25 +60,23 @@ class BlockchainUser:
     # Internal Methods
     # ----------------
 
-    def _add_stream(self, stream, filename=None, tags=None, coerce=False):
+    def _add_stream(self, stream, filename='', tags=None, coerce=False):
         """ Adds binary content from an in-memory stream to the blockchain.
 
         The acting user must have 'can_write' permissions.
 
         Arguments:
             stream (io.BufferedIOBase, io.RawIOBase): A stream or file object
-                to add to the blockchain. This should usually come from open().
-                Otherwise, it should subclass io.BufferedIOBase or io.RawIOBase.
-                The stream content cannot exceed 50MiB.
+                to add to the blockchain. The stream cannot exceed 50MiB.
             filename (str): An optional filename to record as metadata. If left
-                unspecified, this method will use the actual file name if
-                available and the stream's SHA2-256 multihash as a fallback.
+                unspecified, the actual file name will be used if available with
+                the stream's SHA2-256 multihash as a fallback.
             tags (any): Metadata to record alongside the binary content.
             coerce (bool): Force tags into the proper form (see _normalize()).
 
         Raises:
-            ValueError: The content in stream begins with '"Error: '.
-            OSError: The content in stream was more than 50MiB.
+            ValueError: The stream began with b'"Error: '.
+            OSError: The stream exceeded 50MiB.
 
         Returns:
             dict: the new Transaction Object
@@ -96,7 +94,7 @@ class BlockchainUser:
         # returns None (such as tempfile.SpooledTemporaryFile).
         stream.seek(0, io.SEEK_END)
         if stream.tell() > 50 * 1024 * 1024:
-            raise OSError("The stream cannot be larger than 50MiB.")
+            raise OSError("The stream cannot be larger than 50MiB")
         stream.seek(0, io.SEEK_SET)
 
         if not filename:
@@ -218,10 +216,8 @@ class BlockchainUser:
                 e.g.: '{"<key>": "<normalized_metadata>"}'
 
         Returns:
-            JSON: if dumps is True, the normalized metadata will be returned
-                as a JSON-formatted string.
-            [str]: if dumps is False, the normalized metadata will be returned
-                as a list of strings.
+            JSON: If dumps is True, a JSON-formatted string will be returned.
+            [str]: If dumps is False, a list of strings will be returned.
         """
         if md is None:
             tag_list = []
@@ -277,22 +273,22 @@ class BlockchainUser:
 
         IT IS IMPERATIVE THAT YOU DO NOT LOSE ACCESS TO THE SUPER ADMIN.
         If you lose the super admin's secret key, a bad actor will be able to
-        write to your blockchain and revoke permissions from all other users.
+        write to your blockchain, add malicious users, and modify permissions.
 
         This method can only be used once per blockchain.
 
         Args:
-            name (str): A name (not an access key) to give to the super admin.
+            name (str): A name for the super admin. Names can have duplicates.
 
         Returns:
-            dict: The super admin's user information
+            dict: The super admin's user information.
         """
         fields = {"user": self._user(
             admin_name=name, repeat_secret_key=self.secret_key)}
         return self._call_api("/store/admin", fields)
 
     def get_users(self, name="", access_key=""):
-        """ Gets a list of users with access to the blockchain.
+        """ Retrieves a list of users with access to the blockchain.
 
         The acting user must have 'can_read' permissions.
 
@@ -304,9 +300,8 @@ class BlockchainUser:
 
         Returns:
             [dict]: If a matching name or access key is found, the matching
-                user(s) is/are returned as a list of dictionaries.
-                If no arguments are specified, this will be a list of every
-                user on the blockchain instead.
+                user(s) is/are returned as a list of dictionaries. If no
+                arguments are supplied, every user will be returned instead.
             []: If no matching name or access key is found.
         """
         fields = {
@@ -320,12 +315,12 @@ class BlockchainUser:
             return []
 
     def new_confirmed_user(self, name, secret_key=""):
-        """ Adds a new user to the blockchain.
+        """ Adds a new user to the blockchain and confirms them.
 
         The acting user must have 'can_add_user' permissions.
 
         Args:
-            name (str): A name for the new user. Names don't have to be unique.
+            name (str): A name for the new user. Names can have duplicates.
             secret_key (str): A secret key for the new user. If unspecified,
                 the API server will assign you a random one. Secret keys must be
                 at least 8 characters long and contain at least one lowercase,
@@ -333,8 +328,9 @@ class BlockchainUser:
                 helpers.generate_secret_key() and helpers.validate_secret_key().
 
         Returns:
-            BlockchainUser: Created from the blockchain's URL and API token and
-                the new user's key pair.
+            BlockchainUser: If all goes well, a BlockchainUser object created
+                from the blockchain's URL and API token and the new user's key
+                pair will be returned.
 
         Raises:
             ValueError: secret_key was not strong enough.
@@ -368,8 +364,8 @@ class BlockchainUser:
     def set_permissions(self, target_access_key, authorize='', revoke=''):
         """ Grants and/or revokes permissions to/from a user.
 
-        Permissions that are specified in both authorize and revoke will be set
-        to False. Repeatedly modifying a permission does nothing. You can grant
+        Permissions that are specified in both authorize and revoke will be
+        revoked. Repeatedly modifying a permission does nothing. You can grant
         and revoke permissions from yourself. The super admin cannot have their
         permissions modified.
 
@@ -387,43 +383,47 @@ class BlockchainUser:
                 revoke from the user.
 
         Returns:
-            dict: the user's updated information including their access
-                key and any permissions they still have access to
+            dict: If all goes well, the user's updated information (including
+                their access key, name, ID, and permissions) will be returned.
+
+        Raises:
+            ValueError: If an invalid string is provided to revoke or authorize.
         """
-        permissions = {
-            'r': 'can_read',
-            'w': 'can_write',
-            'u': 'can_add_user',
-            'p': 'can_add_permission'
-        }
+        permissions = helpers.permissions  # alias
+        authorize_list = []
+        revoke_list = []
+
+        for c in authorize:
+            try:
+                authorize_list.append(permissions[c])
+            except KeyError:
+                raise ValueError("invalid authorize: '{}'".format(authorize))
+        for c in revoke:
+            try:
+                revoke_list.append(permissions[c])
+            except KeyError:
+                raise ValueError("invalid revoke: '{}'".format(revoke))
+
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key,
-            revoke=[permissions[c] for c in revoke if c in permissions],
-            authorize=[permissions[c] for c in authorize if c in permissions])
+            revoke=revoke_list,
+            authorize=authorize_list)
         }
-        response = self._call_api("/store/authorize", fields)
-        return {
-            'can_read': response.get('can_read') or False,
-            'can_write': response.get('can_write') or False,
-            'can_add_user': response.get('can_add_user') or False,
-            'can_add_permission': response.get('can_add_permission') or False
-        }
+        return self._call_api("/store/authorize", fields)
 
     def get_permissions(self, target_access_key):
-        """ Returns a user's current permissions.
+        """ Retrieves a user's current permissions.
 
         The acting user must have 'can_read' permissions.
 
         Args:
             target_access_key (str): A user to retrieve permissions from.
+
+        Returns:
+            dict: If all goes well, the user's current information (including
+                their access key, name, ID, and permissions) will be returned.
         """
-        info = self.get_users(access_key=target_access_key)[0]
-        return {
-            'can_read': info['can_read'],
-            'can_write': info['can_write'],
-            'can_add_user': info['can_read'],
-            'can_add_permission': info['can_add_permission']
-        }
+        return self.get_users(access_key=target_access_key)[0]
 
     def deactivate(self, target_access_key):
         """ Revokes all permissions from a user.
@@ -434,7 +434,8 @@ class BlockchainUser:
             target_access_key (str): A user to deactivate.
 
         Returns:
-            {"access_key": target_access_key, "error": False}
+            dict: If all goes well, the user's access key and a dummy error
+                message will be returned.
         """
         fields = {"user": self._user(
             user_to_auth_access_key=target_access_key, deactivate=True)}
@@ -454,11 +455,11 @@ class BlockchainUser:
             tags (any): Metadata to record alongside the data.
             coerce (bool): Force tags into the proper form (see _normalize()).
 
-        Raises:
-            ValueError: data begins with '"Error: '.
-
         Returns:
-            dict: the new Transaction Object
+            dict: If all goes well, the new Transaction Object will be returned.
+
+        Raises:
+            ValueError: data began with '"Error: ' or b'"Error: '.
         """
         if isinstance(data, bytes):
             with io.BytesIO(data) as file:
@@ -476,7 +477,6 @@ class BlockchainUser:
             "content_string": data,
             "metadata": self._normalize(tags, coerce=coerce)
         }
-
         return self._call_api("/store/add", fields)["result"]
 
     def add_file(self, file, tags=None, coerce=False):
@@ -492,7 +492,7 @@ class BlockchainUser:
             coerce (bool): Force tags into the proper form (see _normalize()).
 
         Returns:
-            dict: the new Transaction Object.
+            dict: If all goes well, the new Transaction Object will be returned.
         """
         # If a file path was specified, open the file in binary mode.
         if isinstance(file, str):
@@ -508,19 +508,21 @@ class BlockchainUser:
             return self._add_stream(file, file_name, tags, coerce)
 
     def get_content(self, content_hash, download=False):
-        """ Reads hash-addressed content from the blockchain.
+        """ Retrieves content from the blockchain.
 
         The acting user must have 'can_read' permissions.
 
         Args:
             content_hash (str): A SHA2-256 multihash to search for on the
                 blockchain (see helpers.ipfs_hash()).
-            download (bool): If True, the content will be saved as a file in
-                your Downloads folder instead of being returned.
+            download (bool): If True, the content retrieved from the blockchain
+                will be saved to a file in your Downloads folder instead of
+                being returned.
 
         Returns:
-            bytes: If the content hash was found on the blockchain
-            None: If download is True
+            bytes: If the content hash was found on the blockchain, the content
+                it addresses will be returned as a byte string.
+            None: If download is True.
         """
         endpoint = "/store/content?hash={}".format(content_hash)
         fields = {"user": self._user()}
@@ -533,6 +535,11 @@ class BlockchainUser:
         This method is intended to retrieve transaction metadata, not content.
         To reliably retrieve content from the blockchain, use get_content().
 
+        You can specify any combination of query arguments with the following
+        exceptions: (1) transaction_hash must be used alone, (2) if tags_any
+        and tags_all are both specified, tags_all will be ignored, (3) page
+        cannot be used alone.
+
         The acting user must have 'can_read' permissions.
 
         Args:
@@ -543,36 +550,35 @@ class BlockchainUser:
                 content is encountered, the content field will be populated with
                 a URL that can be used to download it.
             sort (bool): If true, transactions will be returned in sorted order.
-                By default, sorted order is not guaranteed.
+                Otherwise, sorted order is not guaranteed. Transactions will be
+                sorted by timestamp.
             reverse (bool): If sort is True, reverse will be used to control
-                the sorting order: False for ascending order (default),
-                True for descending order.
+                the sorting order: False for ascending / chronological order,
+                True for descending / reverse chronological order.
 
         Query Args (kwargs):
             transaction_hash (str): A transaction hash to search for on the
                 blockchain. Each transaction on the blockchain has a unique
                 transaction hash, so this query parameter will only ever match
-                a single transaction. transaction_hash is incompatible with
-                other query parameters and must be used alone.
+                a single transaction.
             content_hash (str): A content hash to search for on the blockchain.
-            tags_all (any): Metadata to search for on the blockchain.
-                In order to match, a transaction must contain every tag
-                specified here. tags_all cannot be used with tags_any.
-            tags_any (any): Metadata to search for on the blockchain.
-                In order to match, a transaction must contain one or more of
-                the tags specified here. tags_any cannot be used with tags_all.
-            last_transactions (int): The number of most recent transactions to
-                request from the blockchain.
+                Matching transactions must have a matching content hash.
+            tags_all (any): Metadata to search for on the blockchain. Matching
+                transactions must contain every tag specified here.
+            tags_any (any): Metadata to search for on the blockchain. Matching
+                transactions must match one or more of the tags specified here.
+            last_transactions (int): A number of most recent transactions to
+                retrieve from the blockchain in reverse chronological order.
+                For example, if last_transactions is 10, the 10 most recent
+                transactions will be retrieved.
             range (int, float, tuple): A time range to search on the blockchain.
-                This can be an integer, float, or 2-tuple. Integers and floats
-                can be positive or negative. If a negative integer or float is
-                specified, the blockchain will perform a look back and return
-                transactions on the range [0, time.time() - <num>]. If a
-                positive integer or float is specified, the blockchain will
-                perform a look ahead and return transactions on the range
-                [<num>, time.time()]. If an (A, B) tuple is specified, the
-                blockchain will return transactions on the range [A, B] or
-                [B, A] depending on whether A < B. Matching transactions must
+                This can be an integer, float, or pair of integers / floats.
+                If a single, negative number is specified, transactions on the
+                range [0, time.time() - <num>] will be retrieved. If a single,
+                positive number is specified, transactions on the range
+                [<num>, time.time()] will be retrieved. if an (A, B) tuple is
+                specified, transactions on the range [A, B] or [B, A] will be
+                retrieved depending on whether A < B. Matching transactions must
                 have been recorded to the blockchain during the specified range.
             page (int): A page of matching transactions to request from the API
                 server. If specified, a page containing up to 100 matching
@@ -581,19 +587,22 @@ class BlockchainUser:
                 at least one other query parameter.
             show_content (bool): if specified and True, return the content for the 
                 transaction(s) along with the transaction details.
+                matching transaction will be returned.
 
         Returns:
             [dict]: If matching transactions were found, they will be returned
                 as a list of dictionaries (Transaction Objects).
-            []: if no matches were found, an empty list will be returned.
+            []: If no matches were found, an empty list will be returned.
 
         Raises:
             ValueError: An illegal combination of parameters was used.
         """
-        # Ensure that transaction_hash is only ever used by itself to prevent
-        # 'result': [{'merkle_proof': {}}]
+        # Ensure that transaction_hash is only ever used by itself to help
+        # prevent 'result': [{'merkle_proof': {}}]
         if kwargs.get("transaction_hash") and len(kwargs) > 1:
-            raise ValueError("Illegal parameter combination.")
+            raise ValueError("transaction_hash must be used alone")
+        elif kwargs.get("page") and len(kwargs) == 1:
+            raise ValueError("page cannot be used alone")
 
         # Handle any shortcuts used with the range argument.
         _range = kwargs.get("range")
@@ -645,40 +654,41 @@ class BlockchainUser:
                         break  # We've gone too far
                     else:
                         raise  # Elevate a legitimate error
+                if page == [{'merkle_proof': {}}]:  # Bad transaction hash
+                    return []
                 try:
-                    transactions.extend(result)
+                    transactions.extend(page)
                 except TypeError:
                     break  # No results were found
                 if len(transactions) < 100:
                     break  # The next page will be blank
 
                 kwargs["page"] += 1
-                fields["metadata"] = json.dumps(kwargs)  # TODO do less work?
+                fields["metadata"] = json.dumps(kwargs)
 
         if sort:
             transactions.sort(key=operator.itemgetter("timestamp"), reverse=reverse)
 
         return transactions
 
-    def verify(self, transaction_hash=None, content_hash=None,
-               content_string=None, filename=None):
-        """ Checks whether a hash, string, or file appears on the blockchain.
+    def verify(self, transaction_hash='', content_hash='', content='', file=''):
+        """ Checks whether a hash, string, or file is present on the blockchain.
 
-        Only one parameter will be used, prioritized from left (high) to right:
-            transaction_hash > content_hash > content_string > filename
+        If multiple arguments are supplied, only one will be considered.
+        Arguments are prioritized from left to right:
+            transaction_hash > content_hash > content > file
 
         The acting user must have 'can_read' permissions.
 
         Args:
-            transaction_hash (str): A transaction hash you want to verify.
-            content_hash (str): A SHA2-256 multihash of the content you
-                want to verify (see helpers.ipfs_hash()).
-            content_string (str): A string you want to verify.
-            filename (str): A file you want to verify.
+            transaction_hash (str): A transaction hash to verify.
+            content_hash (str): A content hash to verify.
+            content (str): A content string to verify.
+            file (str): A path to a file to verify.
 
         Returns:
-            True: if the content was recorded on the blockchain
-            False: if the content was not recorded on the blockchain
+            True: If the verification succeeded, True will be returned.
+            False: If the verification failed, False will be returned.
         """
         fields = {"user": self._user()}
 
@@ -686,12 +696,13 @@ class BlockchainUser:
             fields["metadata"] = json.dumps({"transaction_hash": transaction_hash})
         elif content_hash:
             fields["metadata"] = json.dumps({"content_hash": content_hash})
-        elif content_string:
-            string_hash = helpers.ipfs_hash(content_string)
+        # To speed things up, we'll hash the content or file if provided.
+        elif content:
+            string_hash = helpers.ipfs_hash(content)
             fields["metadata"] = json.dumps({"content_hash": string_hash})
-        elif filename:
-            with open(filename, mode='rb') as file:
-                file_hash = helpers.ipfs_hash(file.read())
+        elif file:
+            with open(file, mode='rb') as f:
+                file_hash = helpers.ipfs_hash(f.read())
             fields["metadata"] = json.dumps({"content_hash": file_hash})
 
         try:

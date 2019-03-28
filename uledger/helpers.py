@@ -20,12 +20,21 @@ import random
 import base58
 import multihash
 
+# A list of character sets to use for generating random strings.
 charsets = [
     'abcdefghijklmnopqrstuvwxyz',
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     '0123456789',
     '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~',
 ]
+
+# A character-permission dictionary to parse shorthand permission strings.
+permissions = {
+    'r': 'can_read',
+    'w': 'can_write',
+    'u': 'can_add_user',
+    'p': 'can_add_permission'
+}
 
 
 def flatten(iterable):

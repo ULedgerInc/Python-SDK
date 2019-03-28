@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name='uledger',
-    version='0.2.5',
+    version='0.2.6',
     description='A Python SDK for the ULedger API',
     license='Apache License 2.0',
     author='Jackson Parsons',

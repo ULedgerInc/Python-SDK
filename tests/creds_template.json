@@ -1,0 +1,12 @@
+{
+  "url": "",
+  "token": "",
+  "admin": {
+    "access_key": "",
+    "secret_key": ""
+  },
+  "lumberjack": {
+    "access_key": "",
+    "secret_key": ""
+  }
+}
