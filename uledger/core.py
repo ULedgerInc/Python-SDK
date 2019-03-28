@@ -579,6 +579,8 @@ class BlockchainUser:
                 transactions will be returned. If left unspecified, every
                 matching transaction will be returned. page must be used with
                 at least one other query parameter.
+            show_content (bool): if specified and True, return the content for the 
+                transaction(s) along with the transaction details.
 
         Returns:
             [dict]: If matching transactions were found, they will be returned
@@ -619,17 +621,11 @@ class BlockchainUser:
             except KeyError:
                 pass
 
-        # Select the endpoint to use.
-        if with_content:
-            endpoint = "/store/getTransactionsWithContent"
-        else:
-            endpoint = "/store/getTransactions"
-
         # If 'page' exists and is an integer, request the one-and-only page.
         if isinstance(kwargs.get("page"), int):
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             try:
-                transactions = self._call_api('/store/transactions', fields, show_content=with_content)["result"] or []
+                transactions = self._call_api('/store/transactions', fields)["result"] or []
             except APIError as e:
                 if str(e) == "No transactions for specified time range.":
                     transactions = []
@@ -643,7 +639,7 @@ class BlockchainUser:
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             while 1:
                 try:
-                    result = self._call_api('/store/transactions', fields, show_content=with_content)["result"]
+                    result = self._call_api('/store/transactions', fields)["result"]
                 except APIError as e:
                     if str(e) == "No transactions for specified time range.":
                         break  # We've gone too far
