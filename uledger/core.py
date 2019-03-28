@@ -629,7 +629,7 @@ class BlockchainUser:
         if isinstance(kwargs.get("page"), int):
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             try:
-                transactions = self._call_api(endpoint, fields)["result"] or []
+                transactions = self._call_api('/store/transactions', fields, show_content=with_content)["result"] or []
             except APIError as e:
                 if str(e) == "No transactions for specified time range.":
                     transactions = []
@@ -643,7 +643,7 @@ class BlockchainUser:
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             while 1:
                 try:
-                    result = self._call_api(endpoint, fields)["result"]
+                    result = self._call_api('/store/transactions', fields, show_content=with_content)["result"]
                 except APIError as e:
                     if str(e) == "No transactions for specified time range.":
                         break  # We've gone too far

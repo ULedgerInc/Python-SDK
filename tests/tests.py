@@ -46,7 +46,7 @@ admin = uledger.BlockchainUser(
 lumberjack = uledger.BlockchainUser(
     url, token, creds['lumberjack']['access_key'], creds['lumberjack']['secret_key'])
 
-
+'''
 class TestAddFile(unittest.TestCase):
     """ Tests the BlockchainUser.add_file() method. """
     def test_normal_file(self):
@@ -65,7 +65,6 @@ class TestAddFile(unittest.TestCase):
         to = lumberjack.add_file(path, tags)
         self.assertIsInstance(to, dict, to)
         os.remove(path)
-
     def test_really_big_file(self):
         tags = ['>50mb', 'file']
         path = 'really_big_file.txt'
@@ -74,7 +73,6 @@ class TestAddFile(unittest.TestCase):
         with self.assertRaises(OSError):
             lumberjack.add_file(path, tags=tags)
         os.remove(path)
-
     def test_context_binary_mode(self):
         path = 'text_mode.txt'
         with open(path, mode='w+b') as file:
@@ -95,36 +93,36 @@ class TestAddString(unittest.TestCase):
     sample_tags = ["sampleTag1", "sampleTag2"]
 
     def test_normal_string(self):
-        to = lumberjack.add_string("a normal string", self.sample_tags)
+        to = lumberjack.add("a normal string", self.sample_tags)
         self.assertIsInstance(to, dict, to)
 
     def test_unicode(self):
-        to = lumberjack.add_string(
+        to = lumberjack.add(
             "with 日本語の文字 to test API decoding", self.sample_tags)
         self.assertIsInstance(to, dict, to)
 
     def test_error_message(self):
         with self.assertRaises(ValueError):
-            lumberjack.add_string('"Error: some random text')
+            lumberjack.add('"Error: some random text')
 
 
 class TestTags(unittest.TestCase):
     """ Tests the API server's tag parsing behavior. """
     def test_50_ascii(self):
-        to = lumberjack.add_string(
+        to = lumberjack.add(
             "test 50 ascii",
             "this string has 50 characters to test the tag lim.",)
         self.assertIsInstance(to, dict, to)
 
     def test_50_unicode(self):
-        to = lumberjack.add_string(
+        to = lumberjack.add(
             "test 50 unicode"
             "this string has 50 characters with some extra 日本語.")
         self.assertIsInstance(to, dict, to)
 
     def test_over_50(self):
         with self.assertRaises(APIError) as e:
-            lumberjack.add_string(
+            lumberjack.add(
                 "test over 50",
                 tags="this string has more than 50 characters to break the tag limit")
             self.assertEqual(str(e), "")
@@ -178,41 +176,41 @@ class TestNormalize(unittest.TestCase):
 class TestAddBytes(unittest.TestCase):
     """ Tests the BlockchainUser.add_bytes() method. """
     def test_normal_bytestring(self):
-        to = lumberjack.add_bytes(b'hello world!')
+        to = lumberjack.add(b'hello world!')
         self.assertIsInstance(to, dict, to)
 
     def test_unusual_bytestring(self):
-        to = lumberjack.add_bytes('雨の夜のブルース'.encode(), 'test.txt')
+        to = lumberjack.add('雨の夜のブルース'.encode(), 'test.txt')
         self.assertIsInstance(to, dict, to)
 
     def test_unusual_bytestring2(self):
-        to = lumberjack.add_bytes(b'\xe0\x87\x00\x35\x00\x30\x5b\x6d')
+        to = lumberjack.add(b'\xe0\x87\x00\x35\x00\x30\x5b\x6d')
         self.assertIsInstance(to, dict, to)
 
     def test_empty_bytestring(self):
-        to = lumberjack.add_bytes(b'')
+        to = lumberjack.add(b'')
         self.assertIsInstance(to, dict, to)
 
     def test_too_large_bytestring(self):
         bytestring = os.urandom(50 * 2**20 + 1)
         with self.assertRaises(OSError):
-            lumberjack.add_bytes(bytestring)
+            lumberjack.add(bytestring)
 
     def test_filename(self):
-        to = lumberjack.add_bytes(os.urandom(20), 'file.txt')
+        to = lumberjack.add(os.urandom(20), 'file.txt')
         self.assertIsInstance(to, dict, to)
 
 
 class TestAddObject(unittest.TestCase):
     """ Tests the BlockchainUser.add_object() method. """
     def test_str(self):
-        lumberjack.add_object([1, 2, 3], 'str')
+        lumberjack.add([1, 2, 3], 'str')
 
     def test_repr(self):
-        lumberjack.add_object(lumberjack, 'repr')
+        lumberjack.add(lumberjack, 'repr')
 
     def test_json(self):
-        lumberjack.add_object({'a': 'dictionary'}, 'json')
+        lumberjack.add({'a': 'dictionary'}, 'json')
 
 
 class TestNewConfirmedUser(unittest.TestCase):
@@ -245,76 +243,60 @@ class TestNewConfirmedUser(unittest.TestCase):
         with self.assertRaises(ValueError):
             admin.new_confirmed_user(self.name2, "weak_password")
 
-
+'''
 class TestPermissions(unittest.TestCase):
     """ Tests the BlockchainUser.set_permissions(), .get_permissions() and
      .deactivate() methods. """
     @classmethod
     def setUpClass(cls):
         cls.ak = lumberjack.access_key
-        cls.activated = {
-            'access_key': cls.ak,
-            'can_add_user': True,
-            'can_add_permission': True,
-            'can_read': True,
-            'can_write': True,
-            'error': 'false'
-        }
-        cls.deactivated = {
-            'error': 'false',
-            'access_key': cls.ak
-        }
-
+        cls.activated = {'can_read': True, 'can_write': True, 'can_add_user': True, 'can_add_permission': True}
+        cls.revoked = {'can_read': False, 'can_write': False, 'can_add_user': False, 'can_add_permission': False}
+        cls.deactivated = {'error': 'false', 'access_key': cls.ak}
+        
     @classmethod
     def current_permissions(cls):
         return admin.set_permissions(lumberjack.access_key)
 
     def restore(self):
-        return admin.set_permissions(
-            self.ak,
-            authorize=['can_read', 'can_write'],
-            revoke=['can_add_permission', 'can_add_user'])
+        return admin.set_permissions(self.ak, authorize='rw', revoke='pu')   
 
     def test_authorize_and_revoke_one(self):
-        perms = admin.set_permissions(self.ak, authorize="can_add_user")
+        perms = admin.set_permissions(self.ak, authorize='u')
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
-        perms = admin.set_permissions(self.ak, revoke="can_add_user")
-        self.assertNotIn('can_add_user', perms, "Permission still present.")
+        perms = admin.set_permissions(self.ak, revoke='u')   
+        self.assertFalse(perms['can_add_user'], "Permission still True.")
         self.restore()
 
     def test_authorize_and_revoke_two(self):
-        perms = admin.set_permissions(
-            self.ak, authorize=("can_add_user", "can_add_permission"))
+        perms = admin.set_permissions(self.ak, authorize='up')  
         self.assertTrue(perms['can_add_user'], "'can_add_user' not set.")
         self.assertTrue(perms['can_add_permission'], "'can_add_permission' not set.")
 
-        perms = admin.set_permissions(
-            self.ak, revoke=("can_read", "can_write"))
-        self.assertNotIn('can_read', perms, "'can_read' still set.")
-        self.assertNotIn('can_write', perms, "'can_write' still present.")
+        perms = admin.set_permissions(self.ak, revoke='rw')     
+        self.assertFalse(perms['can_read'], "'can_read' still True.")
+        self.assertFalse(perms['can_write'], "'can_write' still True.")
 
         self.restore()
 
     def test_authorize_and_revoke_all(self):
-        perms = admin.set_permissions(
-            self.ak, authorize=("can_read", "can_write", "can_add_user", "can_add_permission"))
+        perms = admin.set_permissions(self.ak, authorize='rwup')
         self.assertDictEqual(perms, self.activated)
 
-        perms3 = admin.set_permissions(
-            self.ak, revoke=("can_read", "can_write", "can_add_user", "can_add_permission"))
-        self.assertDictEqual(perms3, self.deactivated)
+        perms3 = admin.set_permissions(self.ak, revoke='rwup')
+        self.assertDictEqual(perms3, self.revoked)
 
         self.restore()
 
     def test_authorize_fake(self):
         with self.assertRaises(APIError) as e:
             admin.set_permissions(self.ak, authorize="fake_permission")
-            self.assertEqual(e.exception, 'value fake_permission is not proper')
+            self.assertEqual(str(e), 'value fake_permission is not proper')
         self.restore()
 
     def test_authorize_redundant(self):
-        perms1 = admin.set_permissions(self.ak, authorize="can_read")
-        perms2 = admin.set_permissions(self.ak, authorize="can_read")
+        perms1 = admin.set_permissions(self.ak, authorize='r') 
+        perms2 = admin.set_permissions(self.ak, authorize='r') 
         self.assertDictEqual(
             perms1, perms2, "Redundant authorization changed permissions")
         self.restore()
@@ -322,26 +304,26 @@ class TestPermissions(unittest.TestCase):
     def test_revoke_fake(self):
         with self.assertRaises(APIError) as e:
             admin.set_permissions(self.ak, revoke="fake_permission")
-            self.assertEqual(e.exception, 'value fake_permission is not proper')
+            self.assertEqual(str(e), 'value fake_permission is not proper')
         self.restore()
 
     def test_revoke_redundant(self):
-        admin.set_permissions(self.ak, revoke="can_read")
+        admin.set_permissions(self.ak, revoke='r') 
         perms1 = self.current_permissions()
-        perms2 = admin.set_permissions(self.ak, revoke="can_read")
+        perms2 = admin.set_permissions(self.ak, revoke='r')
         self.assertDictEqual(perms1, perms2)
         self.restore()
 
     def test_authorize_without_permission(self):
-        admin.set_permissions(self.ak, revoke="can_add_permission")
+        admin.set_permissions(self.ak, revoke='p')  
         with self.assertRaises(APIError) as e:
-            lumberjack.set_permissions(self.ak, authorize="can_read")
+            lumberjack.set_permissions(self.ak, authorize='r') 
             self.assertEqual(e.exception, "you are not authorized to add permission")
         self.restore()
 
     def test_authorize_bad_key(self):
         with self.assertRaises(APIError) as e:
-            lumberjack.set_permissions("bad key", authorize="can_read")
+            lumberjack.set_permissions("bad key", authorize='r')
             self.assertEqual(e.exception, "user does not exist")
         self.restore()
 
@@ -357,14 +339,14 @@ class TestPermissions(unittest.TestCase):
         self.restore()
 
     def test_deactivate_without_permission(self):
-        admin.set_permissions(self.ak, revoke="can_add_permission")
+        admin.set_permissions(self.ak, revoke='p') 
         with self.assertRaises(APIError) as e:
             lumberjack.deactivate(self.ak)
             self.assertEqual(e.exception, "you are not authorized to add permission")
         self.restore()
 
     def test_deactivate_self(self):
-        admin.set_permissions(self.ak, authorize="can_add_permission")
+        admin.set_permissions(self.ak, authorize='p')
         perms = lumberjack.deactivate(self.ak)
         self.assertDictEqual(perms, self.deactivated)
         self.restore()
@@ -378,19 +360,15 @@ class TestPermissions(unittest.TestCase):
 
     def test_set_and_revoke(self):
         perms1 = self.current_permissions()
-        del perms1['can_read']
-        perms2 = admin.set_permissions(
-            self.ak, authorize="can_read", revoke="can_read")
+        perms1['can_read'] = False
+        perms2 = admin.set_permissions(self.ak, authorize='r', revoke='r')
         self.assertDictEqual(perms1, perms2)
         self.restore()
 
     def test_get_permissions(self):
-        perms = admin.set_permissions(
-            self.ak,
-            authorize=["can_read", "can_write"],
-            revoke=["can_add_user", "can_add_permission"])
+        perms = admin.set_permissions(self.ak, authorize='rw', revoke='up')
         self.assertDictEqual(
-            perms, {'error': 'false', 'access_key': self.ak,
+            perms, {'can_add_user': False, 'can_add_permission': False, 
                     'can_read': True, 'can_write': True})
         self.restore()
 
@@ -399,12 +377,12 @@ class TestVerify(unittest.TestCase):
     """ Tests the BlockchainUser.verify() method. """
     def test_verify_normal_string(self):
         content_string = "a normal string"
-        lumberjack.add_string(content_string)
+        lumberjack.add(content_string)
         self.assertTrue(lumberjack.verify(content_string=content_string))
 
     def test_verify_unicode_string(self):
         content_string = "with 日本語の文字 to test API encoding"
-        lumberjack.add_string(content_string)
+        lumberjack.add(content_string)
         self.assertTrue(lumberjack.verify(content_string=content_string))
 
     def test_verify_fail(self):
@@ -420,14 +398,14 @@ class TestVerify(unittest.TestCase):
         admin.set_permissions(lumberjack.access_key, authorize="can_read")
 
     def test_verify_hash(self):
-        content_hash = lumberjack.add_string("hello there")['content_hash']
+        content_hash = lumberjack.add("hello there")['content_hash']
         self.assertTrue(lumberjack.verify(content_hash=content_hash))
 
     def test_verify_bad_hash(self):
         self.assertFalse(lumberjack.verify(content_hash="fail"))
 
     def test_verify_transaction_hash(self):
-        trx_hash = lumberjack.add_string("hello there")['transaction_hash']
+        trx_hash = lumberjack.add("hello there")['transaction_hash']
         self.assertTrue(lumberjack.verify(transaction_hash=trx_hash))
 
     def test_verify_bad_transaction_hash(self):
@@ -470,10 +448,11 @@ class TestValidateSecretKey(unittest.TestCase):
 
 
 # This test is paranoid. Disable it if you want to go fast.
+'''
 class TestNaughtyStrings(unittest.TestCase):
-    """ Tests the BlockchainUser.add_string() method with unexpected inputs. """
+    """ Tests the BlockchainUser.add() method with unexpected inputs. """
     def _check_and_assert(self, naughty_string):
-        to = lumberjack.add_string(naughty_string, 'naughty string')
+        to = lumberjack.add(naughty_string, 'naughty string')
         self.assertIsInstance(to, dict, to)
         check = lumberjack.get_content(
             uledger.ipfs_hash(naughty_string)).decode()
@@ -502,7 +481,7 @@ class TestNaughtyStrings(unittest.TestCase):
         pool.map(self._check_and_assert, blns)
         pool.close()
         pool.join()
-
+'''
 
 if __name__ == "__main__":
     unittest.main()
