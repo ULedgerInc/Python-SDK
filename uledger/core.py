@@ -648,7 +648,7 @@ class BlockchainUser:
             fields = {"user": self._user(), "metadata": json.dumps(kwargs)}
             while 1:
                 try:
-                    result = self._call_api('/store/transactions', fields)["result"]
+                    page = self._call_api('/store/transactions', fields)["result"]
                 except APIError as e:
                     if str(e) == "No transactions for specified time range.":
                         break  # We've gone too far
