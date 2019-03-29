@@ -599,9 +599,9 @@ class BlockchainUser:
         """
         # Ensure that transaction_hash is only ever used by itself to help
         # prevent 'result': [{'merkle_proof': {}}]
-        if kwargs.get("transaction_hash") and len(kwargs) > 1:
-            raise ValueError("transaction_hash must be used alone")
-        elif kwargs.get("page") and len(kwargs) == 1:
+        #if kwargs.get("transaction_hash") and len(kwargs) > 1:
+        #    raise ValueError("transaction_hash must be used alone")
+        if kwargs.get("page") and len(kwargs) == 1:
             raise ValueError("page cannot be used alone")
 
         # Handle any shortcuts used with the range argument.
