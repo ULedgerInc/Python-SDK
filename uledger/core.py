@@ -528,8 +528,7 @@ class BlockchainUser:
         fields = {"user": self._user()}
         return self._call_api2(endpoint, fields, download)
 
-    def get_transactions(self, coerce=False, with_content=False,
-                         sort=True, reverse=False, **kwargs):
+    def get_transactions(self, coerce=False, sort=True, reverse=False, **kwargs):
         """ Queries the blockchain for transactions.
 
         This method is intended to retrieve transaction metadata, not content.
@@ -544,11 +543,6 @@ class BlockchainUser:
 
         Args:
             coerce (bool): Force tags into the proper form (see _normalize()).
-            with_content (bool): If True, a 'content' field will be populated
-                for each Transaction Object when possible. If string content is
-                encountered, it will be returned in the content field. If binary
-                content is encountered, the content field will be populated with
-                a URL that can be used to download it.
             sort (bool): If true, transactions will be returned in sorted order.
                 Otherwise, sorted order is not guaranteed. Transactions will be
                 sorted by timestamp.
@@ -585,9 +579,11 @@ class BlockchainUser:
                 transactions will be returned. If left unspecified, every
                 matching transaction will be returned. page must be used with
                 at least one other query parameter.
-            show_content (bool): if specified and True, return the content for the 
-                transaction(s) along with the transaction details.
-                matching transaction will be returned.
+            show_content (bool): If True, a 'content' field will be populated
+                for each Transaction Object when possible. If string content is
+                encountered, it will be returned in the content field. If binary
+                content is encountered, the content field will be populated with
+                a URL that can be used to download it.
 
         Returns:
             [dict]: If matching transactions were found, they will be returned
@@ -667,6 +663,7 @@ class BlockchainUser:
                 fields["metadata"] = json.dumps(kwargs)
 
         if sort:
+            transactions.sort(key=operator.itemgetter("block_height"), reverse=reverse)
             transactions.sort(key=operator.itemgetter("timestamp"), reverse=reverse)
 
         return transactions
